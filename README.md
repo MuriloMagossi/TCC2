@@ -304,4 +304,31 @@ docker run --rm --network=host fullstorydev/grpcurl -plaintext localhost:30552 l
 docker run --rm --network=host fullstorydev/grpcurl -plaintext localhost:30551 list
 ```
 
-> Obs: No Windows, o parâmetro --network=host pode não funcionar como esperado. Se necessário, use o IP do host em vez de localhost. 
+> Obs: No Windows, o parâmetro --network=host pode não funcionar como esperado. Se necessário, use o IP do host em vez de localhost.
+
+## Testes de Protocolo TCP
+
+O ambiente realiza testes funcionais de TCP tanto via Ingress Controller quanto via API Gateway, utilizando um servidor TCP echo puro.
+
+### Fluxo do TCP
+- Um servidor TCP echo é buildado localmente a partir do Dockerfile (Alpine + socat) e carregado no cluster KIND como `local/tcp-echo:latest`.
+- O serviço backend TCP (`tcp-echo`) expõe a porta 9000 no cluster.
+- O NGINX API Gateway TCP e o Ingress Controller TCP expõem a porta 9000 via NodePort (ex: 30901) para o host.
+- O arquivo `kind/kind-config.yaml` garante o mapeamento da porta NodePort para o host.
+- O script de teste funcional (`tests/tcp/functional/test-tcp.ps1`) detecta automaticamente o NodePort do API Gateway e do Ingress Controller e executa testes de envio e recebimento de mensagens TCP.
+
+### Automação
+1. O script `setup-environment.ps1` faz o build da imagem local TCP echo e carrega no KIND.
+2. Os manifests do diretório `manifests/tcp/` aplicam o backend, API Gateway e Ingress Controller TCP.
+3. O script `test-all-protocols.ps1` executa os testes funcionais, incluindo o TCP.
+
+### Teste manual
+Para testar manualmente o echo TCP via Ingress Controller:
+```powershell
+& tests/tcp/functional/test-tcp-manual.ps1
+```
+
+### Observações
+- O NodePort do API Gateway TCP é detectado automaticamente pelo teste.
+- O mapeamento da porta NodePort deve estar presente no `kind-config.yaml` e o cluster KIND deve ser recriado após alterações nesse arquivo.
+- O backend TCP echo é um container leve baseado em Alpine + socat, garantindo compatibilidade e resposta imediata para testes de echo TCP. 

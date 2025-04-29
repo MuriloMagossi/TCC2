@@ -3,5 +3,5 @@
 
 30/04
 
- -[ ] Fazer análise de resultados automatizado, contendo graficos e BON (Big O Notation)
+ - [ ] Fazer análise de resultados automatizado, contendo graficos e BON (Big O Notation)
 git 

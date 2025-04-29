@@ -6,6 +6,7 @@ metadata:
 
 data:
   nginx.conf: |
+    events {}
     stream {
         server {
             listen 9000;

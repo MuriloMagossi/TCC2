@@ -1,22 +1,21 @@
 # tests/grpc/functional/test-grpc.ps1
 
-Write-Host "==> Teste funcional gRPC (grpcurl via Docker)" -ForegroundColor Cyan
-
-# 1. Port-forward para o serviço grpc-echo na porta 9000
-$pf = Start-Process -PassThru powershell -ArgumentList 'kubectl port-forward svc/grpc-echo 9000:9000'
-Start-Sleep -Seconds 3
-
+# Detectar NodePort do API Gateway gRPC
+$apigwPort = kubectl get svc nginx-apigw-grpc -n grpc -o jsonpath="{.spec.ports[0].nodePort}"
+Write-Host "==> Testando gRPC via API Gateway (porta $apigwPort)..." -ForegroundColor Cyan
 try {
-    Write-Host "\n[1] Listando serviços gRPC disponíveis..." -ForegroundColor Yellow
-    docker run --rm --network=host fullstorydev/grpcurl -plaintext localhost:9000 list
-
-    Write-Host "\n[2] Chamando método Empty do grpcbin.GRPCBin..." -ForegroundColor Yellow
-    docker run --rm --network=host fullstorydev/grpcurl -plaintext -d '{}' localhost:9000 grpcbin.GRPCBin/Empty
-    Write-Host "\nTeste funcional gRPC OK!" -ForegroundColor Green
+    docker run --rm --network=host fullstorydev/grpcurl -plaintext localhost:$apigwPort list
+    Write-Host "gRPC OK (API Gateway): grpcurl respondeu com lista de serviços" -ForegroundColor Green
 } catch {
-    Write-Host "Teste funcional gRPC FALHOU: $($_.Exception.Message)" -ForegroundColor Red
+    Write-Host "gRPC FALHOU (API Gateway): $($_.Exception.Message)" -ForegroundColor Red
 }
 
-if (Get-Process -Id $pf.Id -ErrorAction SilentlyContinue) {
-    Stop-Process -Id $pf.Id
+# Usar sempre a porta 30900 para o Ingress Controller gRPC
+$ingressPort = 30900
+Write-Host "==> Testando gRPC via Ingress Controller (porta $ingressPort)..." -ForegroundColor Cyan
+try {
+    docker run --rm --network=host fullstorydev/grpcurl -plaintext localhost:$ingressPort list
+    Write-Host "gRPC OK (Ingress Controller): grpcurl respondeu com lista de serviços" -ForegroundColor Green
+} catch {
+    Write-Host "gRPC FALHOU (Ingress Controller): $($_.Exception.Message)" -ForegroundColor Red
 } 

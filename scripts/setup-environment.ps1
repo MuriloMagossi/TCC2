@@ -75,7 +75,25 @@ if (-not (kubectl get secret http-echo-tls -o name 2-gt$null)) {
 }
 
 # =========================
-# 7. Mensagem final
+# 7. Build e load da imagem local TCP echo
+# =========================
+Write-Host "==> Buildando imagem local/tcp-echo:latest..." -ForegroundColor Cyan
+$dockerfilePath = "$PSScriptRoot/../Dockerfile"
+$contextPath = "$PSScriptRoot/.."
+if (Test-Path $dockerfilePath) {
+    docker build -t local/tcp-echo:latest $contextPath
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "==> Carregando imagem local/tcp-echo:latest no KIND..." -ForegroundColor Cyan
+        kind load docker-image local/tcp-echo:latest --name comparativo-ingress-apigw
+    } else {
+        Write-Host "[ERRO] Falha ao buildar a imagem local/tcp-echo:latest." -ForegroundColor Red
+    }
+} else {
+    Write-Host "[AVISO] Dockerfile não encontrado em $dockerfilePath. Pulei build/load da imagem local." -ForegroundColor Yellow
+}
+
+# =========================
+# 8. Mensagem final
 # =========================
 Write-Host "\n==> Ambiente pronto! Execute ./scripts/test-all-protocols.ps1 para testar os protocolos." -ForegroundColor Green
 

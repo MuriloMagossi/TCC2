@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-apigw-grpc
+  namespace: grpc
+spec:
+  type: NodePort
+  ports:
+    - name: grpc
+      port: 50551
+      targetPort: 50551
+      nodePort: 30553
+  selector:
+    app: nginx-apigw 

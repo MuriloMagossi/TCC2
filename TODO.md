@@ -1,0 +1,2 @@
+- [ ] Verificar o manifest do TCP e garantir que ele passe nos testes do scripts/test-all-protocols.ps1
+- [ ] Após isso, partir para os testes de performance

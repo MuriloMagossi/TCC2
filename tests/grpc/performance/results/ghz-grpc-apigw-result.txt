@@ -1,0 +1,39 @@
+
+Summary:
+  Count:	26462
+  Total:	30.00 s
+  Slowest:	447.79 ms
+  Fastest:	10.43 ms
+  Average:	113.18 ms
+  Requests/sec:	882.04
+
+Response time histogram:
+  10.427  [1]     |
+  54.164  [14083] |∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎
+  97.900  [151]   |
+  141.636 [192]   |∎
+  185.372 [1640]  |∎∎∎∎∎
+  229.108 [4509]  |∎∎∎∎∎∎∎∎∎∎∎∎∎
+  272.844 [3544]  |∎∎∎∎∎∎∎∎∎∎
+  316.580 [1021]  |∎∎∎
+  360.316 [273]   |∎
+  404.052 [6]     |
+  447.788 [42]    |
+
+Latency distribution:
+  10 % in 25.14 ms 
+  25 % in 28.66 ms 
+  50 % in 35.79 ms 
+  75 % in 216.34 ms 
+  90 % in 255.22 ms 
+  95 % in 275.50 ms 
+  99 % in 320.06 ms 
+
+Status code distribution:
+  [OK]            25462 responses   
+  [Unavailable]   1000 responses    
+
+Error distribution:
+  [900]   rpc error: code = Unavailable desc = the connection is draining                                                                       
+  [100]   rpc error: code = Unavailable desc = error reading from server: read tcp [::1]:56627->[::1]:50551: use of closed network connection   
+

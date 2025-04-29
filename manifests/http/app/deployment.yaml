@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: http-echo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: http-echo
+  template:
+    metadata:
+      labels:
+        app: http-echo
+    spec:
+      containers:
+      - name: http-echo
+        image: hashicorp/http-echo
+        args:
+          - "-listen=:8081"
+          - "-text=Hello from HTTP"
+        ports:
+          - containerPort: 8081
+        resources:
+          requests:
+            cpu: "10m"
+            memory: "32Mi"
+          limits:
+            cpu: "100m"
+            memory: "128Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: http-echo
+spec:
+  selector:
+    app: http-echo
+  ports:
+    - protocol: TCP
+      port: 8081
+      targetPort: 8081 

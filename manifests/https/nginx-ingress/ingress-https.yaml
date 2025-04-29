@@ -1,0 +1,23 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: http-echo-ingress-https
+  namespace: https
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  tls:
+    - hosts:
+        - https.localtest.me
+      secretName: http-echo-tls
+  rules:
+    - host: https.localtest.me
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: https-echo
+                port:
+                  number: 8081 

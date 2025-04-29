@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Logs
+*.log
+
+# Virtualenv
+venv/
+.env/
+
+# IDEs
+.vscode/
+.idea/
+
+# Outros
+.DS_Store
+*.swp
+
+# Go (Golang)
+# Ignora binários e diretórios de build
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+/build/
+/bin/
+/dist/
+# Ignora dependências baixadas pelo Go Modules
+/vendor/ 

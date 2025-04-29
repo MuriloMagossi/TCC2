@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grpc-echo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: grpc-echo
+  template:
+    metadata:
+      labels:
+        app: grpc-echo
+    spec:
+      containers:
+      - name: grpc-echo
+        image: moul/grpcbin:latest
+        ports:
+          - containerPort: 9000
+        resources:
+          requests:
+            cpu: "10m"
+            memory: "32Mi"
+          limits:
+            cpu: "100m"
+            memory: "128Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grpc-echo
+spec:
+  selector:
+    app: grpc-echo
+  ports:
+    - protocol: TCP
+      port: 9000
+      targetPort: 9000 

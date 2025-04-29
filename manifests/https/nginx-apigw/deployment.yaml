@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-apigw
+  namespace: https
+  labels:
+    app: nginx-apigw
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nginx-apigw
+  template:
+    metadata:
+      labels:
+        app: nginx-apigw
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.25
+        resources:
+          requests:
+            cpu: "10m"
+            memory: "32Mi"
+          limits:
+            cpu: "100m"
+            memory: "128Mi"
+        volumeMounts:
+        - name: config
+          mountPath: /etc/nginx/nginx.conf
+          subPath: nginx.conf
+        - name: tls
+          mountPath: /etc/nginx/tls
+      volumes:
+      - name: config
+        configMap:
+          name: nginx-apigw-config
+      - name: tls
+        secret:
+          secretName: nginx-apigw-tls 

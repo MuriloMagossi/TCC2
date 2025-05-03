@@ -34,7 +34,7 @@ kubectl wait --for=condition=Ready pod -l app=nginx-apigw --timeout=60s
 # 3. Inicia o port-forward
 # =========================
 Write-Host "==> Iniciando port-forward para o API Gateway..." -ForegroundColor Cyan
-$pf = Start-Process -PassThru powershell -ArgumentList 'kubectl port-forward svc/nginx-apigw-grpc 50551:50551'
+$pf = Start-Process -PassThru powershell -ArgumentList 'kubectl port-forward -n grpc svc/nginx-apigw-grpc 50551:50551'
 Start-Sleep -Seconds 8 # Aguarda estabilizar
 
 # =========================

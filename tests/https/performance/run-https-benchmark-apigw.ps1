@@ -23,9 +23,6 @@ $conns = 100
 $requests = 1000
 $duration = 30 # segundos
 
-# Caminho do hey (ajuste se necessário)
-$heyPath = "hey.exe"
-
 # Diretório e arquivo para salvar métricas do Docker
 $resultsDir = "tests/https/performance/results"
 if (-not (Test-Path $resultsDir)) {

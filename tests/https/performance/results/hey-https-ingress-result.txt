@@ -1,10 +1,10 @@
 
 Summary:
-  Total:	40.0253 secs
+  Total:	40.0134 secs
   Slowest:	0.0000 secs
   Fastest:	0.0000 secs
   Average:	 NaN secs
-  Requests/sec:	4.9968
+  Requests/sec:	4.9983
   
 
 Response time histogram:

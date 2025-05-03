@@ -24,4 +24,8 @@
 30/04
 
  - [ ] Fazer análise de resultados automatizado, contendo graficos e BON (Big O Notation)
+<<<<<<< HEAD
 git 
+=======
+git 
+>>>>>>> a51a7e1d67132982aabfff3666c4d9f7298c3270

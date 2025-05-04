@@ -5,43 +5,34 @@ $queries = 200
 $concurrentClients = 10
 $duration = 30 # segundos
 
-# Diretório e arquivo para salvar métricas do Docker
-$resultsDir = "tests/graphql/performance/results"
+# Diretório e arquivo para salvar métricas do Docker (usar caminho absoluto)
+$resultsDir = Join-Path $PSScriptRoot ".\results" | Resolve-Path | Select-Object -ExpandProperty Path
 if (-not (Test-Path $resultsDir)) {
     New-Item -ItemType Directory -Path $resultsDir -Force | Out-Null
 }
-$dockerStatsFile = "$resultsDir/docker-stats-graphql-ingress.csv"
+$dockerStatsFile = Join-Path $resultsDir "docker-stats-graphql-ingress.csv"
 $dockerStatsHeader = "Name,CPU %,Mem Usage / Limit,Net I/O,Block I/O,Timestamp"
 Set-Content -Path $dockerStatsFile -Value $dockerStatsHeader
 
-# Configurar URL diretamente para o ingress
-Write-Host "==> Configurando conexão para o GraphQL Ingress..." -ForegroundColor Cyan
-$ingressHost = "graphql.localtest.me"
-$url = "http://$ingressHost/graphql"
-$echoUrl = "http://$ingressHost/graphql/echo"
+# Obter o endereço IP do ingress controller
+Write-Host "==> Obtendo endereço IP do ingress controller..." -ForegroundColor Cyan
 
-# Verificar se o ingress está acessível
-try {
-    $testResponse = Invoke-WebRequest -Uri $url -Method "OPTIONS" -ErrorAction Stop
-    Write-Host "==> Conexão com GraphQL Ingress estabelecida." -ForegroundColor Green
-} catch {
-    Write-Host "[AVISO] Ingress pode não estar acessível: $($_.Exception.Message)" -ForegroundColor Yellow
-    Write-Host "==> Continuando mesmo assim..." -ForegroundColor Yellow
-}
+# Para Kind, usamos localhost com a porta mapeada no kind-config
+$ingressIP = "localhost:8080"
+Write-Host "Ingress controller encontrado em: $ingressIP" -ForegroundColor Green
 
-Write-Host "==> Executando benchmark GraphQL para Ingress..." -ForegroundColor Cyan
+Write-Host "==> Executando benchmark GraphQL para Ingress Controller..." -ForegroundColor Cyan
 
-# Configurar payload da consulta GraphQL
+# Configurar URL e payload da consulta
+$url = "http://$ingressIP/graphql"
 $graphqlQuery = '{"query":"{ hello }"}'
 
 # Iniciar coleta de métricas Docker como um job em paralelo
 Write-Host "==> Iniciando coleta de métricas Docker durante o teste..." -ForegroundColor Cyan
 $collectDockerMetricsJob = Start-Job -ScriptBlock {
     param($dockerStatsFile, $duration)
-    
     $startTime = Get-Date
     $endTime = $startTime.AddSeconds($duration + 5) # Adicionar 5 segundos para garantir que cobre todo o teste
-    
     while ((Get-Date) -lt $endTime) {
         $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"
         $stats = docker stats --no-stream --format "{{.Name}},{{.CPUPerc}},{{.MemUsage}},{{.NetIO}},{{.BlockIO}}"
@@ -51,7 +42,7 @@ $collectDockerMetricsJob = Start-Job -ScriptBlock {
 } -ArgumentList $dockerStatsFile, $duration
 
 # Função para executar consultas GraphQL concorrentes
-function Run-ConcurrentGraphQLQueries {
+function Invoke-ConcurrentGraphQLQueries {
     param (
         [string]$Url,
         [string]$Query,
@@ -105,7 +96,15 @@ function Run-ConcurrentGraphQLQueries {
                     $webRequest = [System.Net.HttpWebRequest]::Create($url)
                     $webRequest.Method = "POST"
                     $webRequest.ContentType = "application/json"
-                    $webRequest.Timeout = 5000
+                    $webRequest.Accept = "application/json"
+                    $webRequest.Timeout = 30000
+                    $webRequest.ReadWriteTimeout = 30000
+                    $webRequest.KeepAlive = $true
+                    $webRequest.ProtocolVersion = [System.Net.HttpVersion]::Version11
+                    $webRequest.ServicePoint.Expect100Continue = $false
+                    $webRequest.ServicePoint.UseNagleAlgorithm = $false
+                    $webRequest.ServicePoint.ConnectionLimit = 100
+                    $webRequest.Host = "graphql.localtest.me"
                     
                     # Enviar dados da consulta GraphQL
                     $buffer = [System.Text.Encoding]::UTF8.GetBytes($query)
@@ -124,8 +123,8 @@ function Run-ConcurrentGraphQLQueries {
                     $endQuery = Get-Date
                     $duration = ($endQuery - $startQuery).TotalMilliseconds
                     
-                    # Verificar se a resposta contém o campo hello
-                    if ($responseContent -match '"hello":') {
+                    # Verificar se a resposta contém o campo data
+                    if ($responseContent -match '"data"') {
                         $results.SuccessCount++
                         $results.ResponseTimes += $duration
                     } else {
@@ -145,7 +144,7 @@ function Run-ConcurrentGraphQLQueries {
     
     # Aguardar todos os jobs
     Write-Host "Executando $NumQueries consultas com $ConcurrentClients clientes concorrentes..." -ForegroundColor Yellow
-    $allJobs = $jobs | Wait-Job
+    $jobs | Wait-Job | Out-Null
     
     # Processar resultados
     foreach ($job in $jobs) {
@@ -199,7 +198,7 @@ function Run-ConcurrentGraphQLQueries {
 }
 
 # Executar o teste principal
-$testResult = Run-ConcurrentGraphQLQueries -Url $url -Query $graphqlQuery -NumQueries $queries -ConcurrentClients $concurrentClients -DurationSec $duration
+$testResult = Invoke-ConcurrentGraphQLQueries -Url $url -Query $graphqlQuery -NumQueries $queries -ConcurrentClients $concurrentClients -DurationSec $duration
 
 # Formatar resultado em formato similar ao do hey para HTTP
 $histogramBuckets = 10
@@ -310,7 +309,8 @@ $resultStr | ForEach-Object { Write-Host $_ }
 
 # Testar o endpoint echo para comparação
 Write-Host "==> Executando benchmark para o endpoint GraphQL Echo Ingress..." -ForegroundColor Cyan
-$echoTestResult = Run-ConcurrentGraphQLQueries -Url $echoUrl -Query $graphqlQuery -NumQueries $queries -ConcurrentClients $concurrentClients -DurationSec $duration
+$echoUrl = "http://$ingressIP/graphql/echo"
+$echoTestResult = Invoke-ConcurrentGraphQLQueries -Url $echoUrl -Query $graphqlQuery -NumQueries $queries -ConcurrentClients $concurrentClients -DurationSec $duration
 
 # Formatar resultado do teste echo
 $sortedEchoTimes = $echoTestResult.ResponseTimes | Sort-Object

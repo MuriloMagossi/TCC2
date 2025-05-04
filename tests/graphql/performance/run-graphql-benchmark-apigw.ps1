@@ -5,12 +5,12 @@ $queries = 200
 $concurrentClients = 10
 $duration = 30 # segundos
 
-# Diretório e arquivo para salvar métricas do Docker
-$resultsDir = "tests/graphql/performance/results"
+# Diretório e arquivo para salvar métricas do Docker (usar caminho absoluto)
+$resultsDir = Join-Path $PSScriptRoot ".\results" | Resolve-Path | Select-Object -ExpandProperty Path
 if (-not (Test-Path $resultsDir)) {
     New-Item -ItemType Directory -Path $resultsDir -Force | Out-Null
 }
-$dockerStatsFile = "$resultsDir/docker-stats-graphql-apigw.csv"
+$dockerStatsFile = Join-Path $resultsDir "docker-stats-graphql-apigw.csv"
 $dockerStatsHeader = "Name,CPU %,Mem Usage / Limit,Net I/O,Block I/O,Timestamp"
 Set-Content -Path $dockerStatsFile -Value $dockerStatsHeader
 
@@ -30,10 +30,8 @@ $graphqlQuery = '{"query":"{ hello }"}'
 Write-Host "==> Iniciando coleta de métricas Docker durante o teste..." -ForegroundColor Cyan
 $collectDockerMetricsJob = Start-Job -ScriptBlock {
     param($dockerStatsFile, $duration)
-    
     $startTime = Get-Date
     $endTime = $startTime.AddSeconds($duration + 5) # Adicionar 5 segundos para garantir que cobre todo o teste
-    
     while ((Get-Date) -lt $endTime) {
         $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"
         $stats = docker stats --no-stream --format "{{.Name}},{{.CPUPerc}},{{.MemUsage}},{{.NetIO}},{{.BlockIO}}"

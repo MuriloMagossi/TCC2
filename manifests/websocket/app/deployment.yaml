@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: websocket-echo
+  namespace: websocket
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: websocket-echo
+  template:
+    metadata:
+      labels:
+        app: websocket-echo
+    spec:
+      containers:
+      - name: websocket-echo
+        image: local/websocket-echo:latest
+        imagePullPolicy: Never
+        ports:
+          - containerPort: 9000
+        resources:
+          requests:
+            cpu: "10m"
+            memory: "32Mi"
+          limits:
+            cpu: "100m"
+            memory: "128Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: websocket-echo
+  namespace: websocket
+spec:
+  selector:
+    app: websocket-echo
+  ports:
+    - protocol: TCP
+      port: 9000
+      targetPort: 9000 

@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-apigw-graphql
+  namespace: graphql
+  labels:
+    app: nginx-apigw-graphql
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nginx-apigw-graphql
+  template:
+    metadata:
+      labels:
+        app: nginx-apigw-graphql
+    spec:
+      containers:
+        - name: nginx-apigw-graphql
+          image: nginx:1.25-alpine
+          resources:
+            requests:
+              cpu: "10m"
+              memory: "32Mi"
+            limits:
+              cpu: "100m"
+              memory: "128Mi"
+          ports:
+            - containerPort: 80
+          volumeMounts:
+            - name: nginx-conf
+              mountPath: /etc/nginx/nginx.conf
+              subPath: nginx.conf
+      volumes:
+        - name: nginx-conf
+          configMap:
+            name: nginx-apigw-graphql-conf 

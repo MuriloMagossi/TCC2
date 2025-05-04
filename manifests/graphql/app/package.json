@@ -1,0 +1,13 @@
+{
+  "name": "graphql-echo",
+  "version": "1.0.0",
+  "description": "Simple GraphQL Echo Server",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@apollo/server": "^4.9.5",
+    "graphql": "^16.8.1"
+  }
+} 

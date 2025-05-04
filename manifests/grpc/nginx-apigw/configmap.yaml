@@ -3,7 +3,8 @@ kind: ConfigMap
 metadata:
   name: nginx-apigw-conf
   namespace: grpc
-
+  labels:
+    app: nginx-apigw
 data:
   nginx.conf: |
     events {}
@@ -13,7 +14,9 @@ data:
             server_name grpc.localtest.me;
 
             location / {
-                grpc_pass grpc://grpc-echo.grpc.svc.cluster.local:9000;
+                grpc_pass grpc://grpc-echo:9000;
+                grpc_set_header Host $host;
+                grpc_set_header X-Real-IP $remote_addr;
             }
         }
     } 

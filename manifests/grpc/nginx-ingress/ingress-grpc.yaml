@@ -1,5 +1,4 @@
-# ConfigMap para mapear porta TCP do Ingress NGINX para o serviço grpc-echo
-tapiVersion: v1
+apiVersion: v1
 kind: ConfigMap
 metadata:
   name: tcp-services
@@ -12,22 +11,4 @@ metadata:
     app.kubernetes.io/instance: ingress-nginx
     app.kubernetes.io/version: "1.10.1"
 data:
-  "9000": "default/grpc-echo:9000"
----
-# Service NodePort para expor a porta 9000 do Ingress Controller
-tapiVersion: v1
-kind: Service
-metadata:
-  name: ingress-nginx-grpc
-  namespace: ingress-nginx
-spec:
-  type: NodePort
-  ports:
-    - name: grpc
-      port: 9000
-      targetPort: 9000
-      nodePort: 30900
-  selector:
-    app.kubernetes.io/component: controller
-    app.kubernetes.io/instance: ingress-nginx
-    app.kubernetes.io/name: ingress-nginx 
+  "9000": "grpc/grpc-echo:9000" 

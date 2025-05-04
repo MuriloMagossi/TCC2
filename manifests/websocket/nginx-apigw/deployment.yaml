@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-apigw-ws
+  namespace: websocket
+  labels:
+    app: nginx-apigw-ws
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nginx-apigw-ws
+  template:
+    metadata:
+      labels:
+        app: nginx-apigw-ws
+    spec:
+      containers:
+        - name: nginx-apigw-ws
+          image: nginx:1.25-alpine
+          resources:
+            requests:
+              cpu: "10m"
+              memory: "32Mi"
+            limits:
+              cpu: "100m"
+              memory: "128Mi"
+          ports:
+            - containerPort: 80
+          volumeMounts:
+            - name: nginx-conf
+              mountPath: /etc/nginx/nginx.conf
+              subPath: nginx.conf
+      volumes:
+        - name: nginx-conf
+          configMap:
+            name: nginx-apigw-ws-conf 

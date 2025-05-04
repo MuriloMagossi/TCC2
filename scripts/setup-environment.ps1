@@ -1,103 +1,126 @@
 # scripts/setup-environment.ps1
 
 # =========================
-# 1. Pré-requisitos e criação do cluster KIND
+# 1. Verificação de pré-requisitos e criação do cluster
 # =========================
 Write-Host "==> Verificando pré-requisitos e criando cluster KIND..." -ForegroundColor Cyan
-& ./kind/cluster-setup.ps1
 
-# =========================
-# 2. Garantir namespaces necessários
-# =========================
-Write-Host "==> Garantindo namespaces 'http', 'https', 'grpc' e 'tcp'..." -ForegroundColor Cyan
-foreach ($ns in @('http','https','grpc','tcp')) {
-    if (-not (kubectl get namespace $ns -o name 2 -gt $null)) { kubectl create namespace $ns }
+# Verificar se o cluster já existe
+$clusterExists = kind get clusters | Select-String -Pattern "comparativo-ingress-apigw" -Quiet
+
+if ($clusterExists) {
+    Write-Host "[INFO] Cluster 'comparativo-ingress-apigw' já existe. Removendo antes de criar novamente..." -ForegroundColor Yellow
+    kind delete cluster --name comparativo-ingress-apigw
 }
 
 # =========================
-# 3. Rotular node para Ingress Controller
+# 2. Criação do cluster
+# =========================
+Write-Host "==> Criando o cluster KIND..." -ForegroundColor Cyan
+kind create cluster --config kind/kind-config.yaml --name comparativo-ingress-apigw
+
+# =========================
+# 3. Aguardar node ficar pronto
+# =========================
+Write-Host "==> Aguardando node ficar Ready..." -ForegroundColor Cyan
+kubectl wait --for=condition=Ready node/comparativo-ingress-apigw-control-plane --timeout=60s
+
+Write-Host "==> Cluster criado e node pronto!" -ForegroundColor Green
+kubectl get nodes
+
+# =========================
+# 4. Criar namespaces
+# =========================
+Write-Host "==> Garantindo namespaces 'http', 'https', 'grpc', 'tcp', 'websocket' e 'graphql'..." -ForegroundColor Cyan
+$namespaces = kubectl get namespaces -o jsonpath='{.items[*].metadata.name}'
+
+if (-not ($namespaces -match "http")) { kubectl create namespace http }
+if (-not ($namespaces -match "https")) { kubectl create namespace https }
+if (-not ($namespaces -match "grpc")) { kubectl create namespace grpc }
+if (-not ($namespaces -match "tcp")) { kubectl create namespace tcp }
+if (-not ($namespaces -match "websocket")) { kubectl create namespace websocket }
+if (-not ($namespaces -match "graphql")) { kubectl create namespace graphql }
+
+# =========================
+# 5. Setup do Ingress Controller
 # =========================
 Write-Host "==> Rotulando node do KIND com ingress-ready=true..." -ForegroundColor Cyan
-kubectl label node $(kubectl get nodes -o jsonpath='{.items[0].metadata.name}') ingress-ready=true --overwrite
+kubectl label node comparativo-ingress-apigw-control-plane ingress-ready=true
 
-# =========================
-# 4. Instalar e aguardar Nginx Ingress Controller
-# =========================
 Write-Host "==> Instalando Nginx Ingress Controller..." -ForegroundColor Cyan
-kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.10.1/deploy/static/provider/kind/deploy.yaml
-
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "[ERRO] Falha ao instalar o Nginx Ingress Controller." -ForegroundColor Red
-    exit 1
-}
-
-Write-Host "==> Aguardando Nginx Ingress Controller ficar pronto..." -ForegroundColor Cyan
-$ready = $false
-for ($i=0; $i -lt 50; $i++) {
-    $status = kubectl get pods -n ingress-nginx -l app.kubernetes.io/component=controller --no-headers | Select-String " 1/1 " | Select-String "Running"
-    if ($status) {
-        $ready = $true
-        break
-    }
-    Start-Sleep -Seconds 2
-}
-if (-not $ready) {
-    Write-Host "[ERRO] Nginx Ingress Controller não ficou pronto após 100 segundos." -ForegroundColor Red
-    exit 1
-}
+kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/kind/deploy.yaml
+kubectl wait --namespace ingress-nginx --for=condition=ready pod --selector=app.kubernetes.io/component=controller --timeout=90s
 
 # =========================
-# 5. Instalar Nginx API Gateway para todos os protocolos
+# 6. Instalação dos API Gateways
 # =========================
 Write-Host "==> Instalando Nginx API Gateway para todos os protocolos..." -ForegroundColor Cyan
-kubectl apply -n http -f manifests/http/nginx-apigw/
-kubectl apply -n https -f manifests/https/nginx-apigw/
-kubectl apply -n grpc -f manifests/grpc/nginx-apigw/
-kubectl apply -n tcp -f manifests/tcp/nginx-apigw/
+kubectl apply -f manifests/http/nginx-apigw/
+kubectl apply -f manifests/https/nginx-apigw/
+kubectl apply -f manifests/grpc/nginx-apigw/
+kubectl apply -f manifests/tcp/nginx-apigw/
+kubectl apply -f manifests/websocket/nginx-apigw/
+kubectl apply -f manifests/graphql/nginx-apigw/
 
 # =========================
-# 6. Garantir Secret TLS para HTTPS
+# 7. Criar Secret TLS para HTTPS
 # =========================
 Write-Host "==> Garantindo Secret TLS para HTTPS..." -ForegroundColor Cyan
-if (-not (kubectl get secret http-echo-tls -o name 2-gt$null)) {
-    $certDir = "$PSScriptRoot/../certs"
-    if (-not (Test-Path $certDir)) { New-Item -ItemType Directory -Path $certDir | Out-Null }
-    $crt = "$certDir/tls.crt"
-    $key = "$certDir/tls.key"
-    if (-not (Test-Path $crt) -or -not (Test-Path $key)) {
-        Write-Host "==> Gerando certificado autoassinado..." -ForegroundColor Cyan
-        & openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout $key -out $crt -subj "/CN=apigw.localtest.me"
-    }
-    kubectl create secret tls http-echo-tls --cert=$crt --key=$key
-    Write-Host "==> Secret TLS criado." -ForegroundColor Green
-} else {
-    Write-Host "==> Secret TLS já existe." -ForegroundColor Yellow
+$tlsExists = kubectl get secret http-echo-tls -n https 2>$null
+if (-not $tlsExists) {
+    kubectl create secret tls http-echo-tls --cert=certs/server.crt --key=certs/server.key -n https
 }
+Write-Host "==> Secret TLS criado." -ForegroundColor Green
 
 # =========================
-# 7. Build e load da imagem local TCP echo
+# 8. Build de imagens locais
 # =========================
+# Build e load da imagem TCP echo
 Write-Host "==> Buildando imagem local/tcp-echo:latest..." -ForegroundColor Cyan
-$dockerfilePath = "$PSScriptRoot/../Dockerfile"
-$contextPath = "$PSScriptRoot/.."
-if (Test-Path $dockerfilePath) {
-    docker build -t local/tcp-echo:latest $contextPath
-    if ($LASTEXITCODE -eq 0) {
-        Write-Host "==> Carregando imagem local/tcp-echo:latest no KIND..." -ForegroundColor Cyan
-        kind load docker-image local/tcp-echo:latest --name comparativo-ingress-apigw
-    } else {
-        Write-Host "[ERRO] Falha ao buildar a imagem local/tcp-echo:latest." -ForegroundColor Red
+docker build -t local/tcp-echo:latest -f Dockerfile .
+kind load docker-image local/tcp-echo:latest --name comparativo-ingress-apigw
+
+# Garantir diretórios de teste
+Write-Host "==> Garantindo estrutura de diretórios para testes..." -ForegroundColor Cyan
+$testDirs = @(
+    "tests/websocket/functional",
+    "tests/websocket/performance",
+    "tests/websocket/performance/results",
+    "tests/graphql/functional",
+    "tests/graphql/performance",
+    "tests/graphql/performance/results"
+)
+
+foreach ($dir in $testDirs) {
+    if (-not (Test-Path $dir)) {
+        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+        Write-Host "[INFO] Criado diretório: $dir" -ForegroundColor Yellow
     }
-} else {
-    Write-Host "[AVISO] Dockerfile não encontrado em $dockerfilePath. Pulei build/load da imagem local." -ForegroundColor Yellow
 }
 
-# =========================
-# 8. Mensagem final
-# =========================
-Write-Host "\n==> Ambiente pronto! Execute ./scripts/test-all-protocols.ps1 para testar os protocolos." -ForegroundColor Green
+# Build e load da imagem WebSocket
+Write-Host "==> Buildando imagem local/websocket-echo:latest..." -ForegroundColor Cyan
+docker build -t local/websocket-echo:latest -f manifests/websocket/app/Dockerfile manifests/websocket/app/
+kind load docker-image local/websocket-echo:latest --name comparativo-ingress-apigw
 
-# (Futuro) Instalar outros componentes, apps de teste, etc.
-# Exemplo:
-# Write-Host "==> Instalando API Gateway..." -ForegroundColor Cyan
-# kubectl apply -f <manifest do gateway> 
+# Build e load da imagem GraphQL
+Write-Host "==> Buildando imagem local/graphql-echo:latest..." -ForegroundColor Cyan
+docker build -t local/graphql-echo:latest -f manifests/graphql/app/Dockerfile manifests/graphql/app/
+kind load docker-image local/graphql-echo:latest --name comparativo-ingress-apigw
+
+# =========================
+# 9. Verificar ferramentas de benchmark
+# =========================
+Write-Host "==> Verificando ferramentas de benchmarking..." -ForegroundColor Cyan
+
+# Verificar hey (para HTTP e GraphQL)
+if (-not (Test-Path "./hey.exe")) {
+    Write-Host "[INFO] hey.exe não encontrado. Será baixado quando necessário." -ForegroundColor Yellow
+}
+
+# Verificar bombardier (para WebSocket)
+if (-not (Test-Path "./bombardier.exe")) {
+    Write-Host "[INFO] bombardier.exe não encontrado. Será baixado quando necessário." -ForegroundColor Yellow
+}
+
+Write-Host "`n==> Ambiente pronto! Execute ./scripts/test-all-protocols.ps1 para testar os protocolos." -ForegroundColor Green 

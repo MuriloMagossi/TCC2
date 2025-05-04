@@ -28,7 +28,7 @@ if (-not (Test-Path "./ghz.exe")) {
 # 2. Readiness do pod grpc-echo
 # =========================
 Write-Host "==> Aguardando pod grpc-echo ficar pronto..." -ForegroundColor Cyan
-kubectl wait --for=condition=Ready pod -l app=grpc-echo --timeout=60s
+kubectl wait --for=condition=Ready pod -l app=grpc-echo -n grpc --timeout=60s
 
 # =========================
 # 3. Parâmetros do benchmark
@@ -54,6 +54,7 @@ Set-Content -Path $dockerStatsFile -Value $dockerStatsHeader
 # 5. Executa o benchmark
 # =========================
 Write-Host "==> Iniciando benchmark gRPC (Ingress Controller) com ghz..." -ForegroundColor Cyan
+Write-Host "==> Conectando em $target" -ForegroundColor Cyan
 $ghzProcess = Start-Process -FilePath "./ghz.exe" -ArgumentList "--insecure --concurrency $conns --total $requests --duration ${duration}s --call $method $target" -NoNewWindow -PassThru -RedirectStandardOutput "$resultsDir/ghz-grpc-ingress-result.txt"
 
 # =========================

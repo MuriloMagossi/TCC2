@@ -11,4 +11,5 @@ metadata:
     app.kubernetes.io/instance: ingress-nginx
     app.kubernetes.io/version: "1.10.1"
 data:
-  "9001": "tcp/tcp-echo:9000" 
+  "9000": "grpc/grpc-echo:9000"
+  "9002": "tcp/tcp-echo:9000" 

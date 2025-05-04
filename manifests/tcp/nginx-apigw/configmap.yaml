@@ -3,13 +3,14 @@ kind: ConfigMap
 metadata:
   name: nginx-apigw-tcp-conf
   namespace: tcp
-
+  labels:
+    app: nginx-apigw-tcp
 data:
   nginx.conf: |
     events {}
     stream {
         server {
             listen 9000;
-            proxy_pass tcp-echo.tcp.svc.cluster.local:9000;
+            proxy_pass tcp-echo:9000;
         }
-    } 
+    }

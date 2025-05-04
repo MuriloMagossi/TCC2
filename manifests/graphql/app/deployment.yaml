@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: graphql-echo
+  namespace: graphql
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: graphql-echo
+  template:
+    metadata:
+      labels:
+        app: graphql-echo
+    spec:
+      containers:
+      - name: graphql-echo
+        image: local/graphql-echo:latest
+        imagePullPolicy: Never
+        ports:
+          - containerPort: 9000
+        resources:
+          requests:
+            cpu: "10m"
+            memory: "32Mi"
+          limits:
+            cpu: "100m"
+            memory: "128Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: graphql-echo
+  namespace: graphql
+spec:
+  selector:
+    app: graphql-echo
+  ports:
+    - protocol: TCP
+      port: 9000
+      targetPort: 9000 

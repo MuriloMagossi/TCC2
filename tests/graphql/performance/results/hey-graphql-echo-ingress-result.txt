@@ -1,0 +1,7 @@
+﻿Summary:
+  Total:        33.6232 secs
+  Requests/sec: 0
+  Success rate: 0%
+  Total queries: 80
+  
+No successful responses to calculate latency statistics.

@@ -2,7 +2,7 @@
 
 Este projeto automatiza a criação de um ambiente de testes para comparar desempenho e funcionalidades entre diferentes soluções de Ingress Controller e API Gateway em um cluster Kubernetes local usando KIND (Kubernetes IN Docker).
 
-A estrutura foi pensada para suportar múltiplos protocolos (HTTP, HTTPS, gRPC, TCP) e agora utiliza namespaces separados para isolar os ambientes HTTP e HTTPS.
+A estrutura foi pensada para suportar múltiplos protocolos (HTTP, HTTPS, gRPC, TCP, WebSocket, GraphQL) e agora utiliza namespaces separados para isolar os ambientes de cada protocolo.
 
 ## Estrutura do Projeto
 
@@ -12,6 +12,9 @@ comparativo-ingress-vs-apigw/
 ├── certs/
 ├── kind/
 ├── manifests/
+│   ├── graphql/
+│   │   ├── app/
+│   │   └── nginx-apigw/
 │   ├── grpc/
 │   │   ├── app/
 │   │   └── nginx-apigw/
@@ -23,11 +26,19 @@ comparativo-ingress-vs-apigw/
 │   │   ├── app/
 │   │   ├── nginx-apigw/
 │   │   └── nginx-ingress/
-│   └── tcp/
+│   ├── tcp/
+│   │   ├── app/
+│   │   └── nginx-apigw/
+│   └── websocket/
 │       ├── app/
 │       └── nginx-apigw/
 ├── scripts/
 └── tests/
+    ├── graphql/
+    │   ├── functional/
+    │   │   └── results/
+    │   └── performance/
+    │       └── results/
     ├── grpc/
     │   ├── functional/
     │   └── performance/
@@ -40,12 +51,18 @@ comparativo-ingress-vs-apigw/
     │   ├── functional/
     │   └── performance/
     │       └── results/
-    └── tcp/
+    ├── tcp/
+    │   ├── functional/
+    │   └── performance/
+    │       └── results/
+    └── websocket/
         ├── functional/
+        │   └── results/
         └── performance/
+            └── results/
 ```
 
-- **Cada ambiente (HTTP/HTTPS) tem seu próprio backend, service e namespace.**
+- **Cada protocolo tem seu próprio backend, service e namespace.**
 - O Nginx API Gateway faz proxy para o serviço correto em cada namespace.
 
 ## Manifests de Aplicação de Teste
@@ -59,6 +76,13 @@ O projeto inclui exemplos de aplicações de teste para cada protocolo, cada uma
 - **Ingress:** `manifests/http/app/ingress.yaml`
   - Expõe o serviço HTTP via Nginx Ingress Controller, acessível em `http://http.localtest.me:8080`.
 
+### HTTPS (porta 8081)
+- **Deployment e Service:** `manifests/https/app/deployment.yaml`
+  - Cria um pod rodando o container `hashicorp/http-echo` na porta 8081.
+  - Service expõe a aplicação internamente na porta 8081.
+- **Ingress:** `manifests/https/app/ingress.yaml`
+  - Expõe o serviço HTTPS via Nginx Ingress Controller, acessível em `https://https.localtest.me:8443`.
+
 ### gRPC (porta 50051)
 - **Deployment e Service:** `manifests/grpc/app/deployment.yaml`
   - Cria um pod rodando um container placeholder (substitua pela sua app gRPC real) na porta 50051.
@@ -69,15 +93,32 @@ O projeto inclui exemplos de aplicações de teste para cada protocolo, cada uma
   - Cria um pod rodando o container `hashicorp/tcp-echo` na porta 9000.
   - Service expõe a aplicação internamente na porta 9000.
 
+### WebSocket (porta específica)
+- **Deployment e Service:** `manifests/websocket/app/deployment.yaml`
+  - Cria um pod rodando um servidor WebSocket na porta especificada.
+  - Service expõe a aplicação internamente.
+
+### GraphQL (porta específica)
+- **Deployment e Service:** `manifests/graphql/app/deployment.yaml`
+  - Cria um pod rodando um servidor GraphQL na porta especificada.
+  - Service expõe a aplicação internamente.
+
+## Protocolos Suportados
+- HTTP/HTTPS
+- gRPC
+- TCP
+- WebSocket
+- GraphQL
+
 ## Automação dos Testes
 
-O script `scripts/test-all-protocols.ps1` automatiza o deploy e o teste dos três protocolos:
+O script `scripts/test-all-protocols.ps1` automatiza o deploy e o teste de todos os protocolos:
 
-- Aplica todos os manifests (HTTP, gRPC, TCP)
+- Aplica todos os manifests (HTTP, HTTPS, gRPC, TCP, WebSocket, GraphQL)
 - Aguarda os pods ficarem prontos
-- Testa HTTP automaticamente
-- Abre port-forward para gRPC e TCP
-- Testa TCP automaticamente e fecha o port-forward
+- Testa cada protocolo automaticamente
+- Abre port-forward quando necessário
+- Fecha port-forwards ao término dos testes
 
 ### Como usar
 
@@ -85,146 +126,6 @@ No PowerShell:
 ```powershell
 ./scripts/test-all-protocols.ps1
 ```
-
-### O que esperar
-- HTTP: O script mostra a resposta do serviço HTTP ("Hello from HTTP").
-- gRPC: O port-forward é aberto em background. Teste com [grpcurl](https://github.com/fullstorydev/grpcurl):
-  ```powershell
-  grpcurl -plaintext localhost:50051 list
-  grpcurl -plaintext -d '{"greeting": "Murilo"}' localhost:50051 grpcbin.GRPCBin/Unary
-  ```
-- TCP: O script testa a conexão TCP automaticamente. Para testar manualmente:
-  ```powershell
-  nc localhost 9000
-  # ou
-  telnet localhost 9000
-  # Digite algo e pressione Enter para ver o echo
-  ```
-
-### Observações
-- Sempre que o cluster for recriado, execute o script para restaurar todo o ambiente.
-- O port-forward para gRPC permanece aberto até ser fechado manualmente ou pelo sistema.
-- O teste TCP é totalmente automatizado.
-
-## Benchmark de Performance HTTP e HTTPS
-
-Agora há dois scripts separados para benchmark:
-
-- **HTTP:** `tests/http/performance/run-http-benchmark.ps1`
-- **HTTPS:** `tests/https/performance/run-https-benchmark.ps1`
-
-Ambos executam o benchmark com [hey](https://github.com/rakyll/hey) e coletam métricas de uso de CPU/memória dos containers via `docker stats` **em paralelo**, garantindo que os dados coletados sejam do mesmo instante do teste.
-
-- Os resultados são salvos em:
-  - `tests/http/performance/results/hey-http-result.txt` e `docker-stats-http.csv`
-  - `tests/https/performance/results/hey-https-result.txt` e `docker-stats-https.csv`
-
-### Como usar
-
-Para HTTP:
-```powershell
-./tests/http/performance/run-http-benchmark.ps1
-```
-
-Para HTTPS:
-```powershell
-./tests/https/performance/run-https-benchmark.ps1
-```
-
-### Metodologia
-- O benchmark (`hey.exe`) é executado em background.
-- As métricas do Docker são coletadas em paralelo, durante toda a execução do teste.
-- Isso garante que os dados de performance e uso de recursos sejam comparáveis entre HTTP e HTTPS.
-
-### Observação
-- Se o download automático do `hey.exe` falhar, baixe manualmente do [site oficial](https://github.com/rakyll/hey) e coloque na pasta do script.
-
-## Protocolos Suportados
-- HTTP/HTTPS
-- gRPC
-- TCP
-
-## Observações
-- Adicione novos protocolos criando novas pastas em `manifests/` e `tests/`.
-- Os manifests e scripts de cada protocolo são independentes para facilitar a manutenção e comparação.
-
-## Como usar
-
-### Ingress Controller (HTTP e HTTPS)
-- HTTP: aplique os manifests em `manifests/http/nginx-ingress/` e `manifests/http/app/`
-- HTTPS: aplique o manifest em `manifests/https/nginx-ingress/ingress-https.yaml` após criar o Secret TLS
-
-### Nginx como API Gateway (HTTP e HTTPS)
-- HTTP: aplique os manifests em `manifests/http/nginx-apigw/`
-  - Isso irá criar:
-    - Um Deployment do Nginx (`nginx-apigw`) configurado como API Gateway, montando o configmap `nginx-apigw-config` com o arquivo `nginx.conf`.
-    - O Nginx escuta na porta 80 e faz proxy para o serviço http-echo na porta 8081.
-    - O acesso pode ser feito via port-forward ou criando um Service do tipo NodePort/LoadBalancer, se desejar expor externamente.
-  - Exemplo de port-forward:
-    ```powershell
-    kubectl port-forward deployment/nginx-apigw 8082:80
-    # Acesse http://localhost:8082/
-    ```
-- HTTPS: aplique os manifests em `manifests/https/nginx-apigw/`
-
-### Setup automatizado de HTTPS
-- Use o script `scripts/https/setup-https.ps1` para gerar o certificado, criar o Secret e aplicar o Ingress HTTPS
-
-### Teste de acesso
-- HTTP: http://localhost:8082/ (API Gateway via port-forward) ou http://localhost:8080/ (Ingress)
-- HTTPS: https://localhost:8444/ (API Gateway) ou https://https.localtest.me:8443/ (Ingress)
-
-## Benchmark HTTP simultâneo: Ingress Controller vs API Gateway
-
-Para comparar o desempenho dos dois caminhos sob a mesma carga e no mesmo instante, utilize os scripts:
-
-- `tests/http/performance/run-http-benchmark-ingress.ps1` (Ingress Controller, porta 8080)
-- `tests/http/performance/run-http-benchmark-apigw.ps1` (API Gateway, porta 8082)
-
-Cada script:
-- Executa o benchmark com [hey](https://github.com/rakyll/hey) para o respectivo endpoint
-- Coleta métricas do Docker em paralelo, salvando em arquivos separados
-
-### Como rodar simultaneamente
-Abra dois terminais e execute:
-
-**Terminal 1:**
-```powershell
-./tests/http/performance/run-http-benchmark-ingress.ps1
-```
-
-**Terminal 2:**
-```powershell
-./tests/http/performance/run-http-benchmark-apigw.ps1
-```
-
-Ou rode ambos em background:
-```powershell
-Start-Process powershell -ArgumentList "-NoExit", "-Command", ".\tests\http\performance\run-http-benchmark-ingress.ps1"
-Start-Process powershell -ArgumentList "-NoExit", "-Command", ".\tests\http\performance\run-http-benchmark-apigw.ps1"
-```
-
-### Resultados
-- Ingress Controller: `tests/http/performance/results/docker-stats-http-ingress.csv` e `hey-http-ingress-result.txt`
-- API Gateway: `tests/http/performance/results/docker-stats-http-apigw.csv` e `hey-http-apigw-result.txt`
-
-Compare os arquivos para análise de desempenho e uso de recursos de cada solução sob a mesma carga.
-
-## Observação sobre NodePort
-Em clusters KIND/Kubernetes, os NodePorts devem estar no range **30000-32767**. Os exemplos deste projeto usam:
-- API Gateway HTTP: `http://localhost:30082/`
-- API Gateway HTTPS: `https://localhost:30443/`
-- Ingress Controller HTTP: `http://localhost:8080/` (ajuste conforme seu Service/port-forward)
-- Ingress Controller HTTPS: (ajuste conforme seu Service/port-forward ou NodePort)
-
-Certifique-se de atualizar os scripts de benchmark e os manifests para refletir essas portas ao rodar os testes.
-
-### Como rodar benchmarks HTTP simultâneos
-- Ingress Controller: `tests/http/performance/run-http-benchmark-ingress.ps1` (porta 8080)
-- API Gateway: `tests/http/performance/run-http-benchmark-apigw.ps1` (porta 30082)
-
-### Como rodar benchmarks HTTPS
-- API Gateway: `https://localhost:30443/` (ajuste o script se necessário)
 
 ## Setup automatizado do ambiente
 
@@ -236,20 +137,37 @@ Basta rodar:
 
 Esse script irá:
 - Criar o cluster KIND com mapeamento de portas
-- Garantir os namespaces `http` e `https`
+- Garantir os namespaces para cada protocolo
 - Instalar o Nginx Ingress Controller
 - Gerar e aplicar o Secret TLS para HTTPS
-- Aplicar todos os manifests nos namespaces corretos (HTTP, HTTPS, gRPC)
-- **Executar testes automatizados de gRPC:**
-  - Testa o acesso gRPC via API Gateway (nginx-apigw) usando port-forward e grpcurl em Docker
-  - Testa o acesso gRPC via Ingress Controller (NodePort 30900) usando grpcurl em Docker
+- Aplicar todos os manifests nos namespaces corretos
+- Executar testes automatizados básicos
 
-Ao final, o ambiente estará pronto para benchmarks e testes. Os resultados dos testes gRPC são exibidos no terminal.
+Ao final, o ambiente estará pronto para benchmarks e testes. Os resultados dos testes iniciais são exibidos no terminal.
 
-Se quiser rodar benchmarks ou testes funcionais adicionais, consulte os scripts em `tests/` ou execute `./scripts/test-all-protocols.ps1`.
+## Arquitetura
 
-## Como funcionam os backends
+### Portas NodePort
+- **HTTP:**
+  - API Gateway: 30082
+  - Ingress Controller: 8080
+- **HTTPS:**
+  - API Gateway: 30443
+  - Ingress Controller: 8443
+- **gRPC:**
+  - API Gateway: 30553
+  - Ingress Controller: 30900
+- **TCP:**
+  - API Gateway: 30901
+  - Ingress Controller: 30902
+- **WebSocket:**
+  - API Gateway: (porta específica)
+  - Ingress Controller: (porta específica)
+- **GraphQL:**
+  - API Gateway: (porta específica)
+  - Ingress Controller: (porta específica)
 
+### Backends
 - **HTTP:**
   - Namespace: `http`
   - Deployment/Service: `http-echo`
@@ -258,77 +176,347 @@ Se quiser rodar benchmarks ou testes funcionais adicionais, consulte os scripts 
   - Namespace: `https`
   - Deployment/Service: `https-echo`
   - Responde "Hello from HTTPS"
+- **gRPC:**
+  - Namespace: `grpc`
+  - Deployment/Service: `grpc-echo`
+  - Serviço gRPC baseado em grpcbin
+- **TCP:**
+  - Namespace: `tcp`
+  - Deployment/Service: `tcp-echo`
+  - Responde com echo do que é enviado
+- **WebSocket:**
+  - Namespace: `websocket`
+  - Deployment/Service: `websocket-echo`
+  - Implementação específica para WebSocket
+- **GraphQL:**
+  - Namespace: `graphql`
+  - Deployment/Service: `graphql-service`
+  - Implementação específica para GraphQL
 
-## Nginx API Gateway (nginx.conf)
+## Testes por Protocolo
 
-- Porta 80: proxy para `http-echo.http.svc.cluster.local:8081`
-- Porta 443: proxy para `https-echo.https.svc.cluster.local:8081`
+### HTTP/HTTPS
 
-## Benchmarks e Testes
+#### Testes Funcionais
+- `test-http-basic.ps1` - Teste básico de conectividade HTTP para verificar se o serviço está funcionando corretamente, testando tanto o acesso via API Gateway quanto diretamente ao serviço.
 
-Scripts de benchmark para HTTP e HTTPS, tanto para Ingress Controller quanto para API Gateway:
+#### Testes de Performance
+- `run-http-benchmark-apigw.ps1` - Benchmark específico para testar a performance do API Gateway.
+- `run-http-benchmark-ingress.ps1` - Benchmark específico para testar a performance do acesso direto ao serviço.
+- `analyze-http-results.ps1` - Análise e comparação dos resultados de benchmark.
 
-- HTTP Ingress: `tests/http/performance/run-http-benchmark-ingress.ps1`
-- HTTP API Gateway: `tests/http/performance/run-http-benchmark-apigw.ps1`
-- HTTPS Ingress: `tests/https/performance/run-https-benchmark-ingress.ps1`
-- HTTPS API Gateway: `tests/https/performance/run-https-benchmark-apigw.ps1`
+#### Como Executar os Testes
 
-Cada script executa o benchmark e coleta métricas do Docker em paralelo, salvando resultados separados.
+Pré-requisitos:
+- Cluster Kubernetes em execução
+- API Gateway e serviço HTTP implantados
+- PowerShell 5.1+
+- (Opcional) Node.js para testes avançados de HTTP
 
-## Teste automatizado de todos os protocolos
-
-Rode:
+Teste Funcional Básico:
 ```powershell
-./scripts/test-all-protocols.ps1
+./tests/http/functional/test-http-basic.ps1
 ```
-Esse script aplica os manifests, aguarda os pods (incluindo https-echo no namespace https) e executa testes automatizados para HTTP, HTTPS, gRPC e TCP.
+
+Benchmarks de Performance:
+```powershell
+# Testar API Gateway
+./tests/http/performance/run-http-benchmark-apigw.ps1
+
+# Testar Serviço direto
+./tests/http/performance/run-http-benchmark-ingress.ps1
+
+# Analisar resultados
+./tests/http/performance/analyze-http-results.ps1
+```
+
+#### Métricas Avaliadas
+- Taxa de sucesso de conexões
+- Tempo médio de conexão (latência)
+- Conexões por segundo (throughput)
+- Uso de recursos do sistema
+
+### gRPC
+
+#### Testes Funcionais
+- `test-grpc-basic.ps1` - Teste básico de conectividade gRPC para verificar se o serviço está funcionando corretamente, testando tanto o acesso via API Gateway quanto diretamente ao serviço.
+
+#### Testes de Performance
+- `run-grpc-benchmark-apigw.ps1` - Benchmark específico para testar a performance do API Gateway usando a ferramenta 'hey', incluindo testes para o endpoint gRPC regular e o endpoint de echo (baixo processamento).
+- `run-grpc-benchmark-ingress.ps1` - Benchmark específico para testar a performance do acesso direto ao serviço, também usando 'hey'.
+- `analyze-grpc-results.ps1` - Script para analisar e comparar os resultados dos benchmarks, produzindo estatísticas e recomendações.
+
+#### Como Executar os Testes
+
+Pré-requisitos:
+- Cluster Kubernetes em execução
+- API Gateway e serviço gRPC implantados
+- PowerShell 5.1+
+- A ferramenta 'hey' (baixada automaticamente pelos scripts de benchmark se necessário)
+
+Teste Funcional Básico:
+```powershell
+./tests/grpc/functional/test-grpc-basic.ps1
+```
+
+Benchmarks de Performance:
+```powershell
+# Testar API Gateway
+./tests/grpc/performance/run-grpc-benchmark-apigw.ps1
+
+# Testar Serviço direto
+./tests/grpc/performance/run-grpc-benchmark-ingress.ps1
+
+# Analisar resultados
+./tests/grpc/performance/analyze-grpc-results.ps1
+```
+
+#### Formato dos Resultados
+
+Os testes de performance utilizam a ferramenta 'hey' para gerar resultados padronizados em um formato consistente com os testes HTTP/HTTPS. Os resultados incluem:
+
+- **Sumário de Desempenho**:
+  - Duração total do teste
+  - Tempos de resposta mais rápido, mais lento e médio
+  - Taxa de requisições por segundo
+  - Total de dados transferidos
+
+- **Histograma de Tempo de Resposta**:
+  - Distribuição visual dos tempos de resposta
+
+- **Distribuição de Latência**:
+  - Percentis (10%, 25%, 50%, 75%, 90%, 95%, 99%)
+
+- **Detalhes de Requisição**:
+  - Tempo de DNS e conexão
+  - Tempo de escrita da requisição
+  - Tempo de espera pela resposta
+  - Tempo de leitura da resposta
+
+- **Distribuição de Códigos de Status**:
+  - Contagem de respostas por código de status HTTP
+
+#### Perspectivas de Análise Comparativa
+
+Os testes comparativos de gRPC fornecem várias perspectivas:
+
+1. **API Gateway vs. Serviço Direto (gRPC completo)**
+   - Comparação de desempenho para chamadas gRPC reais
+
+2. **API Gateway vs. Serviço Direto (Echo - baixo processamento)**
+   - Comparação de overhead puro de infraestrutura
+
+3. **Processamento vs. Echo no API Gateway**
+   - Isolamento do tempo de processamento gRPC
+
+4. **Processamento vs. Echo no Serviço Direto**
+   - Isolamento do tempo de processamento gRPC sem overhead do gateway
+
+## Análise Comparativa Geral
+
+Para todos os protocolos testados, a análise comparativa avalia:
+
+1. **API Gateway (Ingress Controller)**
+   - Vantagens:
+     - Centralização de segurança e autenticação
+     - Gerenciamento de tráfego e roteamento unificado
+   - Possíveis desvantagens:
+     - Possível aumento na latência devido à camada adicional
+
+2. **Acesso Direto ao Serviço**
+   - Vantagens:
+     - Potencialmente menor latência
+     - Comunicação direta sem intermediários
+   - Desvantagens:
+     - Requer gerenciamento de segurança em cada serviço
+     - Ausência de políticas centralizadas
+
+## Considerações para Produção
+
+Para aplicações em produção, considere:
+- Requisitos de segurança e autenticação
+- Necessidade de gerenciamento de tráfego
+- Sensibilidade à latência
+- Requisitos de escalabilidade
+
+Os scripts de análise fornecem recomendações específicas com base nos resultados dos benchmarks, ajudando na tomada de decisão entre as abordagens.
 
 ## Boas práticas e organização
 
-- **Namespaces separados** para HTTP e HTTPS garantem isolamento e clareza.
-- **Nomes distintos** para os backends (`http-echo` e `https-echo`).
+- **Namespaces separados** para cada protocolo garantem isolamento e clareza.
+- **Nomes distintos** para os backends.
 - **Automação total** do setup e deploy.
 - **Benchmarks e testes** facilmente reproduzíveis.
 
-Se precisar de instruções detalhadas para qualquer etapa, consulte os scripts ou peça por exemplos específicos!
+## Resultados
+Resultados dos testes de performance são armazenados no diretório `/tests/{protocolo}/performance/results`.
 
-## Teste gRPC via Docker (grpcurl)
+## Próximos passos
+1. Aprimorar os testes de performance para carga contínua
+2. Adicionar suporte a mais métricas de performance
+3. Visualização gráfica de resultados comparativos
 
-Se não quiser instalar o grpcurl localmente, você pode testar o acesso gRPC usando Docker:
+### WebSocket
 
-```sh
-# Teste via API Gateway (nginx-apigw, porta 30552)
-docker run --rm --network=host fullstorydev/grpcurl -plaintext localhost:30552 list
+#### Testes Disponíveis
 
-# Teste via Ingress NGINX (porta 30551)
-docker run --rm --network=host fullstorydev/grpcurl -plaintext localhost:30551 list
-```
+##### Testes Funcionais
+- `test-websocket-basic.ps1` - Teste básico de conectividade WebSocket para verificar se o serviço está funcionando corretamente, testando tanto o acesso via API Gateway quanto diretamente ao serviço.
 
-> Obs: No Windows, o parâmetro --network=host pode não funcionar como esperado. Se necessário, use o IP do host em vez de localhost.
+##### Testes de Performance
+- `run-websocket-benchmark-apigw.ps1` - Benchmark específico para testar a performance do API Gateway.
+- `run-websocket-benchmark-ingress.ps1` - Benchmark específico para testar a performance do acesso direto ao serviço.
+- `analyze-websocket-results.ps1` - Análise e comparação dos resultados de benchmark.
 
-## Testes de Protocolo TCP
+#### Como Executar os Testes
 
-O ambiente realiza testes funcionais de TCP tanto via Ingress Controller quanto via API Gateway, utilizando um servidor TCP echo puro.
+Pré-requisitos:
+- Cluster Kubernetes em execução
+- API Gateway e serviço WebSocket implantados
+- PowerShell 5.1+
+- (Opcional) Node.js para testes avançados de WebSocket
 
-### Fluxo do TCP
-- Um servidor TCP echo é buildado localmente a partir do Dockerfile (Alpine + socat) e carregado no cluster KIND como `local/tcp-echo:latest`.
-- O serviço backend TCP (`tcp-echo`) expõe a porta 9000 no cluster.
-- O NGINX API Gateway TCP e o Ingress Controller TCP expõem a porta 9000 via NodePort (ex: 30901) para o host.
-- O arquivo `kind/kind-config.yaml` garante o mapeamento da porta NodePort para o host.
-- O script de teste funcional (`tests/tcp/functional/test-tcp.ps1`) detecta automaticamente o NodePort do API Gateway e do Ingress Controller e executa testes de envio e recebimento de mensagens TCP.
-
-### Automação
-1. O script `setup-environment.ps1` faz o build da imagem local TCP echo e carrega no KIND.
-2. Os manifests do diretório `manifests/tcp/` aplicam o backend, API Gateway e Ingress Controller TCP.
-3. O script `test-all-protocols.ps1` executa os testes funcionais, incluindo o TCP.
-
-### Teste manual
-Para testar manualmente o echo TCP via Ingress Controller:
+Teste Funcional Básico:
 ```powershell
-& tests/tcp/functional/test-tcp-manual.ps1
+./tests/websocket/functional/test-websocket-basic.ps1
 ```
 
-### Observações
-- O NodePort do API Gateway TCP é detectado automaticamente pelo teste.
-- O mapeamento da porta NodePort deve estar presente no `kind-config.yaml` e o cluster KIND deve ser recriado após alterações nesse arquivo.
-- O backend TCP echo é um container leve baseado em Alpine + socat, garantindo compatibilidade e resposta imediata para testes de echo TCP. 
+Benchmarks de Performance:
+```powershell
+# Testar API Gateway
+./tests/websocket/performance/run-websocket-benchmark-apigw.ps1
+
+# Testar Serviço direto
+./tests/websocket/performance/run-websocket-benchmark-ingress.ps1
+
+# Analisar resultados
+./tests/websocket/performance/analyze-websocket-results.ps1
+```
+
+#### Métricas Avaliadas
+- Taxa de sucesso de conexões
+- Tempo médio de conexão (latência)
+- Conexões por segundo (throughput)
+- Uso de recursos do sistema
+
+### GraphQL
+
+#### Testes Disponíveis
+
+##### Testes Funcionais
+- `test-graphql-basic.ps1` - Teste básico de consultas GraphQL para verificar se o serviço está funcionando corretamente, testando tanto o acesso via API Gateway quanto diretamente ao serviço.
+
+##### Testes de Performance
+- `run-graphql-benchmark-apigw.ps1` - Benchmark específico para testar a performance do API Gateway usando a ferramenta 'hey', incluindo testes para o endpoint GraphQL regular e o endpoint de echo (baixo processamento).
+- `run-graphql-benchmark-ingress.ps1` - Benchmark específico para testar a performance do acesso direto ao serviço, também usando 'hey'.
+- `analyze-graphql-results.ps1` - Script para analisar e comparar os resultados dos benchmarks, produzindo estatísticas e recomendações.
+
+#### Como Executar os Testes
+
+Pré-requisitos:
+- Cluster Kubernetes em execução
+- API Gateway e serviço GraphQL implantados
+- PowerShell 5.1+
+- A ferramenta 'hey' (baixada automaticamente pelos scripts de benchmark se necessário)
+
+Teste Funcional Básico:
+```powershell
+./tests/graphql/functional/test-graphql-basic.ps1
+```
+
+Benchmarks de Performance:
+```powershell
+# Testar API Gateway
+./tests/graphql/performance/run-graphql-benchmark-apigw.ps1
+
+# Testar Serviço direto
+./tests/graphql/performance/run-graphql-benchmark-ingress.ps1
+
+# Analisar resultados
+./tests/graphql/performance/analyze-graphql-results.ps1
+```
+
+#### Formato dos Resultados
+
+Os testes de performance utilizam a ferramenta 'hey' para gerar resultados padronizados em um formato consistente com os testes HTTP/HTTPS. Os resultados incluem:
+
+- **Sumário de Desempenho**:
+  - Duração total do teste
+  - Tempos de resposta mais rápido, mais lento e médio
+  - Taxa de requisições por segundo
+  - Total de dados transferidos
+
+- **Histograma de Tempo de Resposta**:
+  - Distribuição visual dos tempos de resposta
+
+- **Distribuição de Latência**:
+  - Percentis (10%, 25%, 50%, 75%, 90%, 95%, 99%)
+
+- **Detalhes de Requisição**:
+  - Tempo de DNS e conexão
+  - Tempo de escrita da requisição
+  - Tempo de espera pela resposta
+  - Tempo de leitura da resposta
+
+- **Distribuição de Códigos de Status**:
+  - Contagem de respostas por código de status HTTP
+
+#### Perspectivas de Análise Comparativa
+
+Os testes comparativos de GraphQL fornecem várias perspectivas:
+
+1. **API Gateway vs. Serviço Direto (GraphQL completo)**
+   - Comparação de desempenho para consultas GraphQL reais
+
+2. **API Gateway vs. Serviço Direto (Echo - baixo processamento)**
+   - Comparação de overhead puro de infraestrutura
+
+3. **Processamento vs. Echo no API Gateway**
+   - Isolamento do tempo de processamento GraphQL
+
+4. **Processamento vs. Echo no Serviço Direto**
+   - Isolamento do tempo de processamento GraphQL sem overhead do gateway
+
+## Análise Comparativa Geral
+
+Para todos os protocolos testados, a análise comparativa avalia:
+
+1. **API Gateway (Ingress Controller)**
+   - Vantagens:
+     - Centralização de segurança e autenticação
+     - Gerenciamento de tráfego e roteamento unificado
+   - Possíveis desvantagens:
+     - Possível aumento na latência devido à camada adicional
+
+2. **Acesso Direto ao Serviço**
+   - Vantagens:
+     - Potencialmente menor latência
+     - Comunicação direta sem intermediários
+   - Desvantagens:
+     - Requer gerenciamento de segurança em cada serviço
+     - Ausência de políticas centralizadas
+
+## Considerações para Produção
+
+Para aplicações em produção, considere:
+- Requisitos de segurança e autenticação
+- Necessidade de gerenciamento de tráfego
+- Sensibilidade à latência
+- Requisitos de escalabilidade
+
+Os scripts de análise fornecem recomendações específicas com base nos resultados dos benchmarks, ajudando na tomada de decisão entre as abordagens.
+
+## Boas práticas e organização
+
+- **Namespaces separados** para cada protocolo garantem isolamento e clareza.
+- **Nomes distintos** para os backends.
+- **Automação total** do setup e deploy.
+- **Benchmarks e testes** facilmente reproduzíveis.
+
+## Resultados
+Resultados dos testes de performance são armazenados no diretório `/tests/{protocolo}/performance/results`.
+
+## Próximos passos
+1. Aprimorar os testes de performance para carga contínua
+2. Adicionar suporte a mais métricas de performance
+3. Visualização gráfica de resultados comparativos 

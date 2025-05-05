@@ -1,0 +1,12 @@
+Name,CPU %,Mem Usage / Limit,Net I/O,Block I/O
+comparativo-ingress-apigw-control-plane,7.44%,1.422GiB / 7.701GiB,483MB / 394MB,0B / 0B
+comparativo-ingress-apigw-control-plane,7.07%,1.422GiB / 7.701GiB,483MB / 394MB,0B / 0B
+comparativo-ingress-apigw-control-plane,7.66%,1.42GiB / 7.701GiB,483MB / 394MB,0B / 0B
+comparativo-ingress-apigw-control-plane,10.28%,1.42GiB / 7.701GiB,483MB / 394MB,0B / 0B
+comparativo-ingress-apigw-control-plane,8.85%,1.422GiB / 7.701GiB,483MB / 394MB,0B / 0B
+comparativo-ingress-apigw-control-plane,8.10%,1.419GiB / 7.701GiB,483MB / 394MB,0B / 0B
+comparativo-ingress-apigw-control-plane,9.53%,1.42GiB / 7.701GiB,483MB / 394MB,0B / 0B
+comparativo-ingress-apigw-control-plane,22.21%,1.421GiB / 7.701GiB,483MB / 394MB,0B / 0B
+comparativo-ingress-apigw-control-plane,7.52%,1.422GiB / 7.701GiB,483MB / 394MB,0B / 0B
+comparativo-ingress-apigw-control-plane,7.55%,1.421GiB / 7.701GiB,483MB / 394MB,0B / 0B
+comparativo-ingress-apigw-control-plane,7.44%,1.421GiB / 7.701GiB,483MB / 394MB,0B / 0B

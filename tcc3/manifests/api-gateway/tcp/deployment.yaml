@@ -1,0 +1,154 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tcp-api-gateway-config
+data:
+  nginx.conf: |
+    events {
+        worker_connections 1024;
+    }
+
+    stream {
+        upstream tcp_backend {
+            server tcp-service:8080;
+        }
+
+        # TCP server configuration
+        server {
+            listen 8080;
+            proxy_pass tcp_backend;
+            proxy_connect_timeout 30s;
+            proxy_timeout 1800s;
+            proxy_buffer_size 128k;
+            proxy_buffers 4 256k;
+            proxy_busy_buffers_size 256k;
+
+            # Logging
+            access_log /var/log/nginx/tcp_access.log combined buffer=512k flush=1m;
+            error_log /var/log/nginx/tcp_error.log warn;
+        }
+    }
+
+    http {
+        server {
+            listen 80;
+            server_name _;
+
+            # Health check endpoint
+            location /health {
+                access_log off;
+                return 200 'healthy\n';
+            }
+        }
+    }
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tcp-service
+  namespace: tcp-gateway
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tcp-service
+  template:
+    metadata:
+      labels:
+        app: tcp-service
+    spec:
+      containers:
+      - name: tcc3-tcp
+        image: tcc3-tcp:latest
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 8083
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tcp-service
+  namespace: tcp-gateway
+spec:
+  selector:
+    app: tcp-service
+  ports:
+  - port: 8083
+    targetPort: 8083
+  type: ClusterIP
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tcp-api-gateway
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: tcp-api-gateway
+  template:
+    metadata:
+      labels:
+        app: tcp-api-gateway
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.25
+        ports:
+        - containerPort: 8080
+          name: tcp
+        - containerPort: 80
+          name: http
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 80
+          initialDelaySeconds: 15
+          periodSeconds: 20
+        volumeMounts:
+        - name: nginx-config
+          mountPath: /etc/nginx/nginx.conf
+          subPath: nginx.conf
+      volumes:
+      - name: nginx-config
+        configMap:
+          name: tcp-api-gateway-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tcp-api-gateway
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8080
+    targetPort: 8080
+    name: tcp
+  - port: 80
+    targetPort: 80
+    name: http
+  selector:
+    app: tcp-api-gateway 

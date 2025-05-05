@@ -1,0 +1,213 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: https-api-gateway-config
+data:
+  nginx.conf: |
+    events {
+        worker_connections 1024;
+    }
+
+    http {
+        upstream https_backend {
+            server https-service:8443;
+            keepalive 32;
+        }
+
+        # Rate limiting
+        limit_req_zone $binary_remote_addr zone=https_limit:10m rate=10r/s;
+
+        server {
+            listen 443 ssl;
+            server_name _;
+
+            # SSL configuration
+            ssl_certificate /etc/nginx/ssl/tls.crt;
+            ssl_certificate_key /etc/nginx/ssl/tls.key;
+            ssl_protocols TLSv1.2 TLSv1.3;
+            ssl_ciphers HIGH:!aNULL:!MD5;
+            ssl_prefer_server_ciphers on;
+            ssl_session_cache shared:SSL:10m;
+            ssl_session_timeout 10m;
+
+            # Health check endpoint
+            location /health {
+                access_log off;
+                return 200 'healthy\n';
+            }
+
+            location /https/ {
+                # Rate limiting
+                limit_req zone=https_limit burst=20 nodelay;
+                limit_req_status 429;
+
+                # Proxy settings
+                proxy_pass https://https_backend;
+                proxy_http_version 1.1;
+                proxy_set_header Upgrade $http_upgrade;
+                proxy_set_header Connection 'upgrade';
+                proxy_set_header Host $host;
+                proxy_cache_bypass $http_upgrade;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $scheme;
+
+                # SSL verification
+                proxy_ssl_verify off;
+                proxy_ssl_server_name on;
+
+                # Custom headers
+                add_header X-Service-Type "HTTPS" always;
+                add_header X-Protocol "HTTPS/1.1" always;
+
+                # Circuit breaker
+                proxy_next_upstream error timeout http_500 http_502 http_503 http_504;
+                proxy_next_upstream_tries 3;
+                proxy_next_upstream_timeout 10s;
+
+                # Timeouts
+                proxy_connect_timeout 30s;
+                proxy_send_timeout 1800s;
+                proxy_read_timeout 1800s;
+
+                # Buffer settings
+                proxy_buffer_size 128k;
+                proxy_buffers 4 256k;
+                proxy_busy_buffers_size 256k;
+
+                # Logging
+                access_log /var/log/nginx/https_access.log combined buffer=512k flush=1m;
+                error_log /var/log/nginx/https_error.log warn;
+            }
+        }
+
+        # Redirect HTTP to HTTPS
+        server {
+            listen 80;
+            server_name _;
+            return 301 https://$host$request_uri;
+        }
+    }
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: https-service
+  namespace: https-gateway
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: https-service
+  template:
+    metadata:
+      labels:
+        app: https-service
+    spec:
+      containers:
+      - name: tcc3-https
+        image: tcc3-https:latest
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 8443
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+        volumeMounts:
+        - name: ssl-certs
+          mountPath: /app/certs
+          readOnly: true
+      volumes:
+      - name: ssl-certs
+        secret:
+          secretName: ssl-certs
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: https-service
+  namespace: https-gateway
+spec:
+  selector:
+    app: https-service
+  ports:
+  - port: 8443
+    targetPort: 8443
+  type: ClusterIP
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: https-api-gateway
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: https-api-gateway
+  template:
+    metadata:
+      labels:
+        app: https-api-gateway
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.25
+        ports:
+        - containerPort: 443
+        - containerPort: 80
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 80
+          initialDelaySeconds: 15
+          periodSeconds: 20
+        volumeMounts:
+        - name: nginx-config
+          mountPath: /etc/nginx/nginx.conf
+          subPath: nginx.conf
+        - name: ssl-certs
+          mountPath: /etc/nginx/ssl
+          readOnly: true
+      volumes:
+      - name: nginx-config
+        configMap:
+          name: https-api-gateway-config
+      - name: ssl-certs
+        secret:
+          secretName: ssl-certs
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: https-api-gateway
+spec:
+  type: ClusterIP
+  ports:
+  - port: 443
+    targetPort: 443
+    name: https
+  - port: 80
+    targetPort: 80
+    name: http
+  selector:
+    app: https-api-gateway 

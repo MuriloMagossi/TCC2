@@ -1,0 +1,4 @@
+-r ../requirements.base.txt
+
+# Dependências específicas do serviço GraphQL
+strawberry-graphql==0.219.2 

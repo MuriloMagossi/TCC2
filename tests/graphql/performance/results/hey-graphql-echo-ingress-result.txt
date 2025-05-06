@@ -1,0 +1,43 @@
+﻿Summary:
+  Total:        8.8038 secs
+  Slowest:      0.2407 secs
+  Fastest:      0.001 secs
+  Average:      0.0593 secs
+  Requests/sec: 22.7175
+  Success rate: 100%
+  Total queries: 200
+
+Response time histogram (ms):
+  0.001 - 0.025 [28] 	|#################
+  0.025 - 0.0489 [65] 	|########################################
+  0.0489 - 0.0729 [52] 	|################################
+  0.0729 - 0.0969 [39] 	|########################
+  0.0969 - 0.1209 [8] 	|#####
+  0.1209 - 0.1448 [1] 	|#
+  0.1448 - 0.1688 [1] 	|#
+  0.1688 - 0.1928 [2] 	|#
+  0.1928 - 0.2167 [0] 	|
+  0.2167 - 0.2407 [4] 	|##
+
+
+Latency distribution:
+  10% in 0.003 secs
+  25% in 0.0442 secs
+  50% in 0.0502 secs
+  75% in 0.0831 secs
+  90% in 0.0949 secs
+  95% in 0.1002 secs
+  99% in 0.2407 secs
+
+
+Details (average, fastest, slowest):
+  Total:        8.8038 secs
+  Slowest:      0.2407 secs
+  Fastest:      0.001 secs
+  Average:      0.0593 secs
+  Requests/sec: 22.7175
+
+
+Status code distribution:
+  [200] 200 responses
+

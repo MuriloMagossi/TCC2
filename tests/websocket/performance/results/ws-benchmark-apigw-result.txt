@@ -1,0 +1,39 @@
+﻿==== RESULTADOS DO TESTE WEBSOCKET API GATEWAY ====
+
+SumÃ¡rio:
+  DuraÃ§Ã£o total:       26.9685 segundos
+  Mais lento:          11.5838 ms
+  Mais rÃ¡pido:         0 ms
+  MÃ©dia:               1.2615 ms
+  ConexÃµes/segundo:    3.708
+  
+  Tentativas:          100
+  Bem-sucedidas:       100
+  Taxa de sucesso:     100%
+
+Histograma de tempo de conexÃ£o (ms):
+  0 - 1.2 [62] 	|########################################
+  1.2 - 2.3 [36] 	|#######################
+  2.3 - 3.5 [1] 	|#
+  3.5 - 4.6 [0] 	|
+  4.6 - 5.8 [0] 	|
+  5.8 - 7 [0] 	|
+  7 - 8.1 [0] 	|
+  8.1 - 9.3 [0] 	|
+  9.3 - 10.4 [0] 	|
+  10.4 - 11.6 [1] 	|#
+
+
+DistribuiÃ§Ã£o de latÃªncia:
+  10% em 0.5246 ms
+  25% em 0.9987 ms
+  50% em 1.0452 ms
+  75% em 1.5041 ms
+  90% em 1.8394 ms
+  95% em 2.1219 ms
+  99% em 11.5838 ms
+
+Detalhes:
+  Tempo mÃ©dio de conexÃ£o: 1.26 ms
+  Desvio padrÃ£o: 1.16 ms
+

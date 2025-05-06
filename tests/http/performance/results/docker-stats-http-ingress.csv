@@ -1,0 +1,13 @@
+Name,CPU %,Mem Usage / Limit,Net I/O,Block I/O,Timestamp
+comparativo-ingress-apigw-control-plane,13.04%,1.239GiB / 7.701GiB,247MB / 20.5MB,0B / 0B,2025-05-05 19:24:58.114
+comparativo-ingress-apigw-control-plane,15.43%,1.238GiB / 7.701GiB,247MB / 20.5MB,0B / 0B,2025-05-05 19:25:01.251
+comparativo-ingress-apigw-control-plane,8.66%,1.238GiB / 7.701GiB,247MB / 20.5MB,0B / 0B,2025-05-05 19:25:03.773
+comparativo-ingress-apigw-control-plane,6.48%,1.237GiB / 7.701GiB,247MB / 20.5MB,0B / 0B,2025-05-05 19:25:06.303
+comparativo-ingress-apigw-control-plane,10.22%,1.24GiB / 7.701GiB,247MB / 20.5MB,0B / 0B,2025-05-05 19:25:08.836
+comparativo-ingress-apigw-control-plane,9.76%,1.24GiB / 7.701GiB,247MB / 20.5MB,0B / 0B,2025-05-05 19:25:11.709
+comparativo-ingress-apigw-control-plane,7.86%,1.239GiB / 7.701GiB,247MB / 20.5MB,0B / 0B,2025-05-05 19:25:14.227
+comparativo-ingress-apigw-control-plane,19.74%,1.239GiB / 7.701GiB,247MB / 20.5MB,0B / 0B,2025-05-05 19:25:16.750
+comparativo-ingress-apigw-control-plane,8.45%,1.24GiB / 7.701GiB,247MB / 20.5MB,0B / 0B,2025-05-05 19:25:19.266
+comparativo-ingress-apigw-control-plane,9.25%,1.238GiB / 7.701GiB,247MB / 20.5MB,0B / 0B,2025-05-05 19:25:22.093
+comparativo-ingress-apigw-control-plane,9.98%,1.238GiB / 7.701GiB,247MB / 20.5MB,0B / 0B,2025-05-05 19:25:24.602
+comparativo-ingress-apigw-control-plane,8.83%,1.238GiB / 7.701GiB,247MB / 20.5MB,0B / 0B,2025-05-05 19:25:27.124

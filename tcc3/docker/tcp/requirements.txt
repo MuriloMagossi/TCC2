@@ -1,4 +1,0 @@
--r ../requirements.base.txt
-
-# Dependências específicas do serviço TCP
-# Nenhuma dependência adicional necessária 

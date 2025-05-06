@@ -1,5 +1,0 @@
--r ../requirements.base.txt
-
-# Dependências específicas do serviço HTTPS
-requests==2.31.0
-pyOpenSSL==23.3.0 

@@ -1,4 +1,0 @@
--r ../requirements.base.txt
-
-# Dependências específicas do serviço WebSocket
-websockets==12.0 

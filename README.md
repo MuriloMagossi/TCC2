@@ -6,7 +6,7 @@ A estrutura foi pensada para suportar múltiplos protocolos (HTTP, HTTPS, gRPC, 
 
 ## Estrutura do Projeto
 
-```.
+```
 comparativo-ingress-vs-apigw/
 │
 ├── certs/

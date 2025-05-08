@@ -93,22 +93,24 @@ O projeto inclui exemplos de aplicações de teste para cada protocolo, cada uma
   - Cria um pod rodando o container `hashicorp/tcp-echo` na porta 9000.
   - Service expõe a aplicação internamente na porta 9000.
 
-### WebSocket (porta específica)
+### WebSocket (porta 9000)
 - **Deployment e Service:** `manifests/websocket/app/deployment.yaml`
-  - Cria um pod rodando um servidor WebSocket na porta especificada.
-  - Service expõe a aplicação internamente.
+  - Cria um pod rodando um servidor WebSocket na porta 9000
+  - Service expõe a aplicação internamente na porta 9000
+  - **Importante:** WebSocket é um protocolo de aplicação que opera sobre HTTP/HTTPS e TCP. Ele começa com uma conexão HTTP normal (handshake) e depois é "upgraded" para WebSocket, permitindo comunicação bidirecional.
 
-### GraphQL (porta específica)
+### GraphQL (porta 9000)
 - **Deployment e Service:** `manifests/graphql/app/deployment.yaml`
-  - Cria um pod rodando um servidor GraphQL na porta especificada.
-  - Service expõe a aplicação internamente.
+  - Cria um pod rodando um servidor GraphQL (Apollo Server) na porta 9000
+  - Service expõe a aplicação internamente na porta 9000
+  - **Importante:** GraphQL é uma linguagem de consulta e manipulação de dados, não um protocolo de rede. As requisições GraphQL são transportadas via HTTP/HTTPS.
+  - O servidor implementa endpoints GraphQL que podem ser acessados via HTTP POST para `/graphql`
 
 ## Protocolos Suportados
-- HTTP/HTTPS
+- HTTP/HTTPS (incluindo GraphQL sobre HTTP)
 - gRPC
 - TCP
-- WebSocket
-- GraphQL
+- WebSocket (protocolo de aplicação sobre HTTP/HTTPS)
 
 ## Automação dos Testes
 
@@ -407,8 +409,8 @@ Benchmarks de Performance:
 - `test-graphql-basic.ps1` - Teste básico de consultas GraphQL para verificar se o serviço está funcionando corretamente, testando tanto o acesso via API Gateway quanto diretamente ao serviço.
 
 ##### Testes de Performance
-- `run-graphql-benchmark-apigw.ps1` - Benchmark específico para testar a performance do API Gateway usando a ferramenta 'hey', incluindo testes para o endpoint GraphQL regular e o endpoint de echo (baixo processamento).
-- `run-graphql-benchmark-ingress.ps1` - Benchmark específico para testar a performance do acesso direto ao serviço, também usando 'hey'.
+- `run-graphql-benchmark-apigw.ps1` - Benchmark específico para testar a performance do API Gateway usando a ferramenta 'hey', enviando requisições HTTP POST com queries GraphQL.
+- `run-graphql-benchmark-ingress.ps1` - Benchmark específico para testar a performance do acesso direto ao serviço, também usando 'hey' para enviar requisições HTTP POST com queries GraphQL.
 - `analyze-graphql-results.ps1` - Script para analisar e comparar os resultados dos benchmarks, produzindo estatísticas e recomendações.
 
 #### Como Executar os Testes
@@ -467,15 +469,19 @@ Os testes comparativos de GraphQL fornecem várias perspectivas:
 
 1. **API Gateway vs. Serviço Direto (GraphQL completo)**
    - Comparação de desempenho para consultas GraphQL reais
+   - Medição do overhead do API Gateway em requisições HTTP POST com payload GraphQL
 
 2. **API Gateway vs. Serviço Direto (Echo - baixo processamento)**
    - Comparação de overhead puro de infraestrutura
+   - Avaliação do impacto do API Gateway em requisições HTTP simples
 
 3. **Processamento vs. Echo no API Gateway**
    - Isolamento do tempo de processamento GraphQL
+   - Análise do impacto do parsing e validação de queries GraphQL
 
 4. **Processamento vs. Echo no Serviço Direto**
    - Isolamento do tempo de processamento GraphQL sem overhead do gateway
+   - Avaliação do desempenho puro do servidor GraphQL
 
 ## Análise Comparativa Geral
 

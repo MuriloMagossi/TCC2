@@ -6,11 +6,11 @@ $messageCount = 200
 $duration = 30 # segundos
 
 # Diretório e arquivo para salvar métricas do Docker
-$resultsDir = "C:\Users\Murilo\Desktop\TCC2\tcc2\tests\websocket\performance\results"
+$resultsDir = Join-Path $PSScriptRoot "results"
 if (-not (Test-Path $resultsDir)) {
     New-Item -ItemType Directory -Path $resultsDir -Force | Out-Null
 }
-$dockerStatsFile = "$resultsDir\docker-stats-websocket-apigw.csv"
+$dockerStatsFile = Join-Path $resultsDir "docker-stats-websocket-apigw.csv"
 $dockerStatsHeader = "Name,CPU %,Mem Usage / Limit,Net I/O,Block I/O"
 Set-Content -Path $dockerStatsFile -Value $dockerStatsHeader
 
@@ -158,7 +158,7 @@ Detalhes:
 
 "@
     
-    $resultStr | Out-File -FilePath "$resultsDir\ws-benchmark-apigw-result.txt" -Encoding utf8
+    $resultStr | Out-File -FilePath $(Join-Path $resultsDir 'ws-benchmark-apigw-result.txt') -Encoding utf8
     $resultStr | ForEach-Object { Write-Host $_ }
     
 } else {
@@ -395,17 +395,17 @@ setTimeout(() => {
 "@
 
     # Verificar se temos dependências instaladas
-    $tempDir = "$resultsDir\temp"
+    $tempDir = Join-Path $resultsDir "temp"
     if (-not (Test-Path $tempDir)) {
         New-Item -ItemType Directory -Path $tempDir -Force | Out-Null
     }
     
     # Salvar o script temporário
-    $scriptPath = "$tempDir\ws-benchmark-apigw.js"
+    $scriptPath = Join-Path $tempDir "ws-benchmark-apigw.js"
     Set-Content -Path $scriptPath -Value $wsTestScript
     
     # Verificar e instalar a biblioteca ws se necessário
-    if (-not (Test-Path "$tempDir\node_modules\ws")) {
+    if (-not (Test-Path $(Join-Path $tempDir "node_modules\ws"))) {
         Write-Host "Instalando dependências necessárias para o teste WebSocket..." -ForegroundColor Yellow
         Push-Location $tempDir
         npm init -y | Out-Null
@@ -426,13 +426,13 @@ while ((Get-Date) -lt `$endTime) {
 }
 "@
 
-    $statsScriptPath = "$tempDir\collect-docker-stats.ps1"
+    $statsScriptPath = Join-Path $tempDir "collect-docker-stats.ps1"
     Set-Content -Path $statsScriptPath -Value $statsCollectionScript
     $statsProcess = Start-Process -FilePath "powershell" -ArgumentList "-File $statsScriptPath" -NoNewWindow -PassThru
     
     # Executar o teste
     Push-Location $tempDir
-    node $scriptPath | Tee-Object -FilePath "$resultsDir\ws-benchmark-apigw-result.txt"
+    node $scriptPath | Tee-Object -FilePath $(Join-Path $resultsDir 'ws-benchmark-apigw-result.txt')
     Pop-Location
     
     # Aguardar finalização da coleta de métricas
@@ -449,11 +449,11 @@ if ($portForwardProcess -and -not $portForwardProcess.HasExited) {
 }
 
 # Limpar arquivos temporários
-$tempDir = "$resultsDir\temp"
+$tempDir = Join-Path $resultsDir "temp"
 if (Test-Path $tempDir) {
     Write-Host "Limpando arquivos temporários..." -ForegroundColor Gray
     Remove-Item -Path $tempDir -Recurse -Force -ErrorAction SilentlyContinue
 }
 
 Write-Host "==> Benchmark WebSocket API Gateway concluído!" -ForegroundColor Green
-Write-Host "Resultados salvos em $resultsDir\ws-benchmark-apigw-result.txt" 
+Write-Host "Resultados salvos em $(Join-Path $resultsDir 'ws-benchmark-apigw-result.txt')" 

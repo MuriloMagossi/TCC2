@@ -6,27 +6,27 @@ $messageCount = 200
 $duration = 30 # segundos
 
 # Diretório e arquivo para salvar métricas do Docker
-$resultsDir = "C:\Users\Murilo\Desktop\TCC2\tcc2\tests\websocket\performance\results"
+$resultsDir = Join-Path $PSScriptRoot "results"
 if (-not (Test-Path $resultsDir)) {
     New-Item -ItemType Directory -Path $resultsDir -Force | Out-Null
 }
-$dockerStatsFile = "$resultsDir\docker-stats-websocket-ingress.csv"
+$dockerStatsFile = Join-Path $resultsDir "docker-stats-websocket-ingress.csv"
 $dockerStatsHeader = "Name,CPU %,Mem Usage / Limit,Net I/O,Block I/O"
 Set-Content -Path $dockerStatsFile -Value $dockerStatsHeader
 
-# Iniciar port-forward para Serviço WebSocket direto
-Write-Host "==> Iniciando port-forward para Serviço WebSocket direto..." -ForegroundColor Cyan
-$servicePort = 9901
-$portForwardProcess = Start-Process -FilePath "kubectl" -ArgumentList "port-forward svc/websocket-echo $($servicePort):9000 -n websocket" -PassThru -NoNewWindow
+# Iniciar port-forward para Ingress Controller
+Write-Host "==> Iniciando port-forward para Ingress Controller..." -ForegroundColor Cyan
+$ingressPort = 8080  # Porta padrão do Ingress Controller
+$portForwardProcess = Start-Process -FilePath 'kubectl' -ArgumentList @('port-forward', 'svc/ingress-nginx-controller', "$($ingressPort):80", '-n', 'ingress-nginx') -NoNewWindow -PassThru
 Start-Sleep -Seconds 3 # Aguardar conexão ser estabelecida
 
-# Verificar se Node.js está instalado (necessário para teste WebSocket adequado)
+# Verificar se Node.js está instalado
 $nodeInstalled = Get-Command "node" -ErrorAction SilentlyContinue
 if (-not $nodeInstalled) {
     Write-Host "[AVISO] Node.js não está instalado. Usando teste básico com conexões TCP." -ForegroundColor Yellow
     
     # Teste básico usando TCP nativo
-    Write-Host "==> Executando teste básico de conexão TCP para WebSocket Service..." -ForegroundColor Cyan
+    Write-Host "==> Executando teste básico de conexão TCP para WebSocket via Ingress..." -ForegroundColor Cyan
     
     $successful = 0
     $failed = 0
@@ -43,7 +43,7 @@ if (-not $nodeInstalled) {
         
         $connectionStart = Get-Date
         $client = New-Object System.Net.Sockets.TcpClient
-        $task = $client.ConnectAsync("localhost", $servicePort)
+        $task = $client.ConnectAsync("localhost", $ingressPort)
         
         if ($task.Wait(2000) -and $client.Connected) {
             $connectionEnd = Get-Date
@@ -59,7 +59,6 @@ if (-not $nodeInstalled) {
             if ($client.Connected) { $client.Close() }
         }
         
-        # Pequena pausa
         Start-Sleep -Milliseconds 100
     }
     
@@ -155,26 +154,49 @@ Distribuição de latência:
 Detalhes:
   Tempo médio de conexão: $([Math]::Round($avgConnectionTime, 2)) ms
   Desvio padrão: $([Math]::Round($stdDev, 2)) ms
-
 "@
     
-    $resultStr | Out-File -FilePath "$resultsDir/ws-benchmark-ingress-result.txt" -Encoding utf8
+    $resultStr | Out-File -FilePath (Join-Path $resultsDir 'ws-benchmark-ingress-result.txt') -Encoding utf8
     $resultStr | ForEach-Object { Write-Host $_ }
     
 } else {
     # Usar teste Node.js WebSocket adequado
-    Write-Host "==> Executando teste WebSocket nativo com Node.js para Serviço direto..." -ForegroundColor Cyan
+    Write-Host "==> Executando teste WebSocket nativo com Node.js via Ingress..." -ForegroundColor Cyan
 
-    # Script para testar WebSocket com Node.js
-    $wsTestScript = @"
-const WebSocket = require('ws');
-const url = 'ws://localhost:$servicePort';
+    # Criar diretório temporário
+    $tempDir = Join-Path $resultsDir "temp"
+    if (-not (Test-Path $tempDir)) {
+        New-Item -ItemType Directory -Path $tempDir -Force | Out-Null
+    }
+
+    # Script para coletar métricas Docker
+    $statsCollectionScript = @'
+$startTime = Get-Date
+$endTime = $startTime.AddSeconds({0})
+
+while ((Get-Date) -lt $endTime) {
+    docker stats --no-stream --format "{{{{.Name}}}},{{{{.CPUPerc}}}},{{{{.MemUsage}}}},{{{{.NetIO}}}},{{{{.BlockIO}}}}" | Add-Content -Path "{1}"
+    Start-Sleep -Seconds 1
+}
+'@ -f $duration, $dockerStatsFile
+
+    # Salvar script de coleta
+    $statsScriptPath = Join-Path $tempDir 'collect-docker-stats-ingress.ps1'
+    Set-Content -Path $statsScriptPath -Value $statsCollectionScript
+
+    # Iniciar coleta de métricas
+    $statsProcess = Start-Process -FilePath 'powershell' -ArgumentList @('-File', $statsScriptPath) -NoNewWindow -PassThru
+
+    # Script de teste WebSocket
+    $wsTestScript = @'
+const WebSocket = require("ws");
+const url = "ws://websocket.localtest.me:{0}";
 
 // Configurações
-const CONNECTIONS = $connections;
-const MESSAGES_PER_CONNECTION = $messageCount;
+const CONNECTIONS = {1};
+const MESSAGES_PER_CONNECTION = {2};
 const CONCURRENT_CLIENTS = 10;
-const MAX_DURATION_MS = $($duration * 1000);
+const MAX_DURATION_MS = {3};
 
 // Arrays para métricas
 let latencies = [];
@@ -226,16 +248,16 @@ function createConnection(id) {
     const ws = new WebSocket(url);
     const connectionMessages = [];
     
-    ws.on('open', () => {
+    ws.on("open", () => {
         const connectionEstablishTime = Date.now() - connectionStartTime;
         connectionTimes.push(connectionEstablishTime);
         connectionsSuccessful++;
         
         for (let i = 0; i < MESSAGES_PER_CONNECTION; i++) {
             const message = {
-                id: \`msg-\${i}-\${Date.now()}-\${id}\`,
+                id: `msg-${i}-${Date.now()}-${id}`,
                 timestamp: Date.now(),
-                data: \`Test message \${i}\`
+                data: `Test message ${i}`
             };
             const msgStr = JSON.stringify(message);
             connectionMessages.push(message);
@@ -244,7 +266,7 @@ function createConnection(id) {
         }
     });
     
-    ws.on('message', (data) => {
+    ws.on("message", (data) => {
         try {
             const response = JSON.parse(data.toString());
             const originalMsg = connectionMessages.find(m => m.id === response.id);
@@ -269,14 +291,14 @@ function createConnection(id) {
         }
     });
     
-    ws.on('close', () => {
+    ws.on("close", () => {
         // Verificar se teste terminou
         if (connectionsAttempted >= CONNECTIONS || messagesReceived >= CONNECTIONS * MESSAGES_PER_CONNECTION) {
             if (!endTime) endTest();
         }
     });
     
-    ws.on('error', (err) => {
+    ws.on("error", (err) => {
         errors++;
         connectionsFailed++;
     });
@@ -312,78 +334,78 @@ function endTest() {
     const msgHistogram = createHistogram(messageTimes);
     
     // Criar string do histograma de conexão
-    let connHistogramStr = '';
+    let connHistogramStr = "";
     const maxConnCount = Math.max(...connHistogram.counts);
     for (let i = 0; i < connHistogram.buckets; i++) {
         const bucketStart = connHistogram.min + (i * connHistogram.bucketSize);
         const bucketEnd = connHistogram.min + ((i + 1) * connHistogram.bucketSize);
         const barLength = Math.round((connHistogram.counts[i] / maxConnCount) * 40) || 0;
-        const bar = ''.padStart(barLength, '■');
-        connHistogramStr += \`  \${bucketStart.toFixed(1)} - \${bucketEnd.toFixed(1)} [\${connHistogram.counts[i]}] \\t|\${bar}\\n\`;
+        const bar = "".padStart(barLength, "■");
+        connHistogramStr += `  ${bucketStart.toFixed(1)} - ${bucketEnd.toFixed(1)} [${connHistogram.counts[i]}] \t|${bar}\n`;
     }
     
     // Criar string do histograma de mensagens
-    let msgHistogramStr = '';
+    let msgHistogramStr = "";
     const maxMsgCount = Math.max(...msgHistogram.counts);
     for (let i = 0; i < msgHistogram.buckets; i++) {
         const bucketStart = msgHistogram.min + (i * msgHistogram.bucketSize);
         const bucketEnd = msgHistogram.min + ((i + 1) * msgHistogram.bucketSize);
         const barLength = Math.round((msgHistogram.counts[i] / maxMsgCount) * 40) || 0;
-        const bar = ''.padStart(barLength, '■');
-        msgHistogramStr += \`  \${bucketStart.toFixed(1)} - \${bucketEnd.toFixed(1)} [\${msgHistogram.counts[i]}] \\t|\${bar}\\n\`;
+        const bar = "".padStart(barLength, "■");
+        msgHistogramStr += `  ${bucketStart.toFixed(1)} - ${bucketEnd.toFixed(1)} [${msgHistogram.counts[i]}] \t|${bar}\n`;
     }
     
     // Resultados
-    console.log(\`==== RESULTADOS DO TESTE WEBSOCKET INGRESS ====
+    console.log(`==== RESULTADOS DO TESTE WEBSOCKET INGRESS ====
 
 Sumário:
-  Duração total:        \${durationSec.toFixed(4)} segundos
-  Taxa de mensagens:    \${(messagesReceived / durationSec).toFixed(4)} msgs/seg
-  Taxa de conexões:     \${(connectionsSuccessful / durationSec).toFixed(4)} conn/seg
+  Duração total:        ${durationSec.toFixed(4)} segundos
+  Taxa de mensagens:    ${(messagesReceived / durationSec).toFixed(4)} msgs/seg
+  Taxa de conexões:     ${(connectionsSuccessful / durationSec).toFixed(4)} conn/seg
   
-  Conexões tentadas:    \${connectionsAttempted}
-  Conexões sucesso:     \${connectionsSuccessful}
-  Conexões falhas:      \${connectionsFailed}
-  Taxa de sucesso:      \${((connectionsSuccessful / connectionsAttempted) * 100).toFixed(2)}%
+  Conexões tentadas:    ${connectionsAttempted}
+  Conexões sucesso:     ${connectionsSuccessful}
+  Conexões falhas:      ${connectionsFailed}
+  Taxa de sucesso:      ${((connectionsSuccessful / connectionsAttempted) * 100).toFixed(2)}%
   
-  Mensagens enviadas:   \${messagesSent}
-  Mensagens recebidas:  \${messagesReceived}
-  Taxa de entrega:      \${((messagesReceived / messagesSent) * 100).toFixed(2)}%
-  Erros:                \${errors}
+  Mensagens enviadas:   ${messagesSent}
+  Mensagens recebidas:  ${messagesReceived}
+  Taxa de entrega:      ${((messagesReceived / messagesSent) * 100).toFixed(2)}%
+  Erros:                ${errors}
   
-  Latência média (conn): \${connAvg.toFixed(2)} ms
-  Latência média (msg):  \${msgAvg.toFixed(2)} ms
+  Latência média (conn): ${connAvg.toFixed(2)} ms
+  Latência média (msg):  ${msgAvg.toFixed(2)} ms
   
 Histograma de tempo de conexão (ms):
-\${connHistogramStr}
+${connHistogramStr}
 
 Distribuição da latência de conexão:
-  10% em \${calculatePercentile(connectionTimes, 10).toFixed(2)} ms
-  25% em \${calculatePercentile(connectionTimes, 25).toFixed(2)} ms
-  50% em \${calculatePercentile(connectionTimes, 50).toFixed(2)} ms
-  75% em \${calculatePercentile(connectionTimes, 75).toFixed(2)} ms
-  90% em \${calculatePercentile(connectionTimes, 90).toFixed(2)} ms
-  95% em \${calculatePercentile(connectionTimes, 95).toFixed(2)} ms
-  99% em \${calculatePercentile(connectionTimes, 99).toFixed(2)} ms
+  10% em ${calculatePercentile(connectionTimes, 10).toFixed(2)} ms
+  25% em ${calculatePercentile(connectionTimes, 25).toFixed(2)} ms
+  50% em ${calculatePercentile(connectionTimes, 50).toFixed(2)} ms
+  75% em ${calculatePercentile(connectionTimes, 75).toFixed(2)} ms
+  90% em ${calculatePercentile(connectionTimes, 90).toFixed(2)} ms
+  95% em ${calculatePercentile(connectionTimes, 95).toFixed(2)} ms
+  99% em ${calculatePercentile(connectionTimes, 99).toFixed(2)} ms
 
 Histograma de tempo de mensagem (ms):
-\${msgHistogramStr}
+${msgHistogramStr}
 
 Distribuição da latência de mensagem:
-  10% em \${calculatePercentile(messageTimes, 10).toFixed(2)} ms
-  25% em \${calculatePercentile(messageTimes, 25).toFixed(2)} ms
-  50% em \${calculatePercentile(messageTimes, 50).toFixed(2)} ms
-  75% em \${calculatePercentile(messageTimes, 75).toFixed(2)} ms
-  90% em \${calculatePercentile(messageTimes, 90).toFixed(2)} ms
-  95% em \${calculatePercentile(messageTimes, 95).toFixed(2)} ms
-  99% em \${calculatePercentile(messageTimes, 99).toFixed(2)} ms
-\`);
+  10% em ${calculatePercentile(messageTimes, 10).toFixed(2)} ms
+  25% em ${calculatePercentile(messageTimes, 25).toFixed(2)} ms
+  50% em ${calculatePercentile(messageTimes, 50).toFixed(2)} ms
+  75% em ${calculatePercentile(messageTimes, 75).toFixed(2)} ms
+  90% em ${calculatePercentile(messageTimes, 90).toFixed(2)} ms
+  95% em ${calculatePercentile(messageTimes, 95).toFixed(2)} ms
+  99% em ${calculatePercentile(messageTimes, 99).toFixed(2)} ms
+`);
     
     process.exit(0);
 }
 
 // Iniciar teste com clientes concorrentes
-console.log(\`Iniciando teste com \${CONCURRENT_CLIENTS} clientes concorrentes (\${CONNECTIONS} conexões totais)...\`);
+console.log(`Iniciando teste com ${CONCURRENT_CLIENTS} clientes concorrentes (${CONNECTIONS} conexões totais)...`);
 for (let i = 0; i < Math.min(CONCURRENT_CLIENTS, CONNECTIONS); i++) {
     createConnection(i + 1);
 }
@@ -392,49 +414,26 @@ for (let i = 0; i < Math.min(CONCURRENT_CLIENTS, CONNECTIONS); i++) {
 setTimeout(() => {
     if (!endTime) endTest();
 }, MAX_DURATION_MS);
-"@
+'@ -f $ingressPort, $connections, $messageCount, ($duration * 1000)
 
-    # Verificar se temos dependências instaladas
-    $tempDir = "$resultsDir/temp"
-    if (-not (Test-Path $tempDir)) {
-        New-Item -ItemType Directory -Path $tempDir -Force | Out-Null
-    }
-    
-    # Salvar o script temporário
-    $scriptPath = "$tempDir/ws-benchmark-ingress.js"
-    Set-Content -Path $scriptPath -Value $wsTestScript
-    
+    # Salvar script de teste
+    $wsScriptPath = Join-Path $tempDir 'ws-benchmark-ingress.js'
+    Set-Content -Path $wsScriptPath -Value $wsTestScript
+
     # Verificar e instalar a biblioteca ws se necessário
-    if (-not (Test-Path "$tempDir/node_modules/ws")) {
+    if (-not (Test-Path (Join-Path $tempDir 'node_modules/ws'))) {
         Write-Host "Instalando dependências necessárias para o teste WebSocket..." -ForegroundColor Yellow
         Push-Location $tempDir
         npm init -y | Out-Null
         npm install ws | Out-Null
         Pop-Location
     }
-    
-    # Iniciar coleta de métricas Docker enquanto o teste executa
-    Write-Host "==> Iniciando coleta de métricas Docker durante o teste..." -ForegroundColor Cyan
-    $statsCollectionScript = @"
-# Script para coletar métricas Docker
-`$startTime = Get-Date
-`$endTime = `$startTime.AddSeconds($duration)
 
-while ((Get-Date) -lt `$endTime) {
-    docker stats --no-stream --format "{{.Name}},{{.CPUPerc}},{{.MemUsage}},{{.NetIO}},{{.BlockIO}}" | Add-Content -Path "$dockerStatsFile"
-    Start-Sleep -Seconds 1
-}
-"@
-
-    $statsScriptPath = "$tempDir/collect-docker-stats-ingress.ps1"
-    Set-Content -Path $statsScriptPath -Value $statsCollectionScript
-    $statsProcess = Start-Process -FilePath "powershell" -ArgumentList "-File $statsScriptPath" -NoNewWindow -PassThru
-    
     # Executar o teste
     Push-Location $tempDir
-    node $scriptPath | Tee-Object -FilePath "$resultsDir/ws-benchmark-ingress-result.txt"
+    node $wsScriptPath | Tee-Object -FilePath (Join-Path $resultsDir 'ws-benchmark-ingress-result.txt')
     Pop-Location
-    
+
     # Aguardar finalização da coleta de métricas
     if ($statsProcess -and -not $statsProcess.HasExited) {
         Write-Host "Aguardando conclusão da coleta de métricas Docker..." -ForegroundColor Gray
@@ -449,11 +448,11 @@ if ($portForwardProcess -and -not $portForwardProcess.HasExited) {
 }
 
 # Limpar arquivos temporários
-$tempDir = "$resultsDir/temp"
+$tempDir = Join-Path $resultsDir "temp"
 if (Test-Path $tempDir) {
     Write-Host "Limpando arquivos temporários..." -ForegroundColor Gray
     Remove-Item -Path $tempDir -Recurse -Force -ErrorAction SilentlyContinue
 }
 
-Write-Host "==> Benchmark WebSocket Ingress concluído!" -ForegroundColor Green
-Write-Host "Resultados salvos em $resultsDir/ws-benchmark-ingress-result.txt" 
+Write-Host "==> Benchmark WebSocket via Ingress concluído!" -ForegroundColor Green
+Write-Host "Resultados salvos em $(Join-Path $resultsDir 'ws-benchmark-ingress-result.txt')" 

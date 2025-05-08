@@ -1,8 +1,5 @@
 # tests/graphql/performance/run-graphql-benchmark-apigw.ps1
 
-# Definir o diretório raiz do projeto
-$projectRoot = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $PSScriptRoot))
-
 # Parâmetros do teste
 $queries = 200
 $concurrentClients = 10

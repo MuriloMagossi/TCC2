@@ -29,4 +29,5 @@ nodes:
         protocol: TCP
       - containerPort: 32643
         hostPort: 32643
-        protocol: TCP 
+        protocol: TCP
+    image: kindest/node:v1.28.0 
